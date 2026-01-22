@@ -1,0 +1,83 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  safelist: [
+    'bg-my-black',
+    'bg-my-white',
+    'bg-my-border',
+    'bg-blue',
+    'bg-light-blue',
+    'bg-ai-chat',
+    'bg-warning',
+    'bg-success',
+    'bg-user2',
+    'bg-user3',
+    'bg-user4',
+    'bg-user5',
+    'bg-user6',
+    'bg-user7',
+    'bg-user8',
+    'bg-key',
+    'bg-custom',
+    'bg-responsedto',
+    'bg-requestdto',
+    'bg-entity',
+    'bg-loginleft',
+
+    'hover:bg-blue',
+    'hover:bg-light-blue',
+
+    'text-my-black',
+    'text-my-white',
+    'text-blue',
+    'text-my-border',
+
+    'border-my-border',
+    'border-blue',
+    'border-warning',
+    'border-success',
+
+    'focus:border-blue',
+    'focus:ring-blue',
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        pretendard: ['Pretendard', 'sans-serif'],
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        fadeIn: 'fadeIn 0.3s ease-in-out',
+      },
+      colors: {
+        blue: '#1E50AF',
+        'light-blue': '#C3DAF7',
+        'my-black': '#303030',
+        'my-white': '#F9F9F9',
+        'my-border': '#CFCFCF',
+        'ai-chat': '#ECECEC',
+        warning: '#DC3545',
+        success: '#28A745',
+        user2: '#5271C4',
+        user3: '#70B2FF',
+        user4: '#44C2B3',
+        user5: '#A3E0A9',
+        user6: '#FFD166',
+        user7: '#FF9F5A',
+        user8: '#C18AFF',
+        key: '#FBC001',
+        custom: '#F5B3B4',
+        responsedto: '#FBC198',
+        requestdto: '#C4E8C7',
+        entity: '#E2C8FF',
+        loginleft: '#F2F4F7',
+      },
+    },
+  },
+  plugins: [],
+};
