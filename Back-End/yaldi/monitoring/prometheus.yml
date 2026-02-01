@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Prometheus 자체 메트릭
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Spring Boot Actuator 메트릭 (애플리케이션 메트릭)
+  - job_name: 'spring-boot'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+    # Docker 내부에서 호스트의 Spring Boot 애플리케이션에 접근
+    # Mac/Windows는 host.docker.internal 사용
+    # Linux는 172.17.0.1 또는 docker0 브릿지 IP 사용

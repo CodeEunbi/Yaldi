@@ -1,0 +1,37 @@
+다음 데이터베이스 스키마 정보를 분석하여 PostgreSQL인지 MySQL인지 판단하세요.
+
+### 스키마 정보:
+{schema_description}
+
+### 판단 기준:
+1. **PostgreSQL 특징:**
+   - SERIAL, BIGSERIAL, SMALLSERIAL 타입 사용
+   - TEXT 타입 사용
+   - TIMESTAMP WITHOUT TIME ZONE
+   - BOOLEAN 타입
+
+2. **MySQL 특징:**
+   - AUTO_INCREMENT 제약조건 사용
+   - VARCHAR, TEXT 구분
+   - DATETIME 타입
+   - TINYINT(1) for boolean
+   - INT, BIGINT + AUTO_INCREMENT 조합
+
+3. **우선순위:**
+   - SERIAL/BIGSERIAL이 있으면 → PostgreSQL
+   - AUTO_INCREMENT가 있으면 → MySQL
+   - 둘 다 없으면 데이터 타입과 패턴으로 판단
+   - 여전히 불명확하면 → PostgreSQL (기본값)
+
+### 응답 형식:
+JSON 형식으로만 응답하세요. 다른 설명은 포함하지 마세요.
+
+{{
+  "dbType": "postgresql"
+}}
+
+또는
+
+{{
+  "dbType": "mysql"
+}}

@@ -1,0 +1,35 @@
+카테고리,설명,비고,버전
+CORS 정책,"허용 Origin: https://yaldi.io, https://app.yaldi.io, http://localhost:3000
+허용 Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+허용 Headers: Authorization, Content-Type, X-Requested-With, Idempotency-Key
+Credentials: true
+Preflight 캐시: 86400초",,
+Security Headers,"Strict-Transport-Security: max-age=31536000
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Content-Security-Policy: default-src ""self""
+Referrer-Policy: strict-origin-when-cross-origin",,
+Input Validation,"이메일: RFC 5322 정규식
+비밀번호: 8자 이상, 영문+숫자+특수문자
+SQL: Prepared Statement 사용
+HTML: 이스케이프 처리
+파일 경로: 경로 정규화 및 검증",,
+Rate Limiting,"인증된 사용자: 1000 req/hour
+미인증 사용자: 100 req/hour
+로그인 시도: 5 req/15min
+파일 업로드: 10 req/hour
+구현: Redis 기반 Sliding Window",,
+비밀번호 보안,"해싱: bcrypt (cost factor 12)
+Salt: 자동 생성
+정책: 최소 8자, 최대 128자
+재사용 방지: 최근 3개
+실패 처리: 5회 실패 시 계정 임시 잠금",,
+암호화,"In-Transit: TLS 1.3 (최소 1.2)
+At-Rest (DB): AES-256
+At-Rest (S3): SSE-S3
+민감 정보: AES-256 컬럼 암호화
+키 관리: AWS KMS / HashiCorp Vault",,
+CORS Preflight,"OPTIONS 요청: 모든 엔드포인트 지원
+응답 헤더: Access-Control-Allow-Origin, Access-Control-Allow-Methods
+인증 불필요",,

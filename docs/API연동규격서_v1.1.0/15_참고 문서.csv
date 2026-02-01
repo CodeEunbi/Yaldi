@@ -1,0 +1,9 @@
+카테고리,설명,비고,버전
+Yaldi 문서,"API Documentation: https://docs.yaldi.io
+Status Page: https://status.yaldi.io
+GitHub: https://github.com/yaldi-io",,
+공식 문서,"OpenAPI Specification: https://spec.openapi.org/oas/v3.0.3
+JWT: https://jwt.io
+OAuth 2.0: https://oauth.net/2/
+RFC 6749 (OAuth 2.0): https://tools.ietf.org/html/rfc6749
+RFC 7662 (Token Introspection): https://tools.ietf.org/html/rfc7662",,

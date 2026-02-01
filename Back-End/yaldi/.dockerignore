@@ -1,0 +1,37 @@
+# Back-End/yaldi/.dockerignore
+
+# 빌드 아티팩트 제외 (Jenkins가 관리)
+.gradle/
+build/
+!build/libs/*.jar
+
+# 소스 코드 (JAR만 필요)
+src/
+
+# 개발 환경 파일들
+.git/
+.gitignore
+.env
+*.md
+README.md
+Dockerfile
+.dockerignore
+
+# IDE 설정
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# 로그 파일
+*.log
+logs/
+
+# 테스트
+.gradle-test/
+build/test-results/
+
+# OS 생성 파일
+.DS_Store
+Thumbs.db

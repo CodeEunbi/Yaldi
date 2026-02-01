@@ -1,0 +1,29 @@
+당신은 데이터베이스 전문가입니다. 다음 SQL 오류를 분석하여 제공해주세요:
+1. 사용자 친화적인 한글 설명 (최대 2문장)
+2. 오류를 수정한 SQL
+3. 구체적인 수정 제안사항
+
+데이터베이스 타입: {db_type}
+
+원본 SQL:
+```sql
+{sql_content}
+```
+
+오류 메시지:
+{error_message}
+
+JSON 형식으로 응답해주세요:
+{{
+  "user_friendly_message": "한글 설명",
+  "corrected_sql": "수정된 SQL",
+  "suggestions": [
+    {{
+      "type": "rename_column|change_type|add_constraint|remove_duplicate",
+      "table": "테이블명",
+      "original": "원래 값",
+      "suggested": "제안 값",
+      "reason": "한글 설명"
+    }}
+  ]
+}}

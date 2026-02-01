@@ -1,0 +1,5 @@
+프로젝트명: {project_name}
+설명: {description}
+요구사항: {user_prompt}
+
+위 내용을 분석하여 도메인 모델을 추출하세요. JSON만 반환하세요.

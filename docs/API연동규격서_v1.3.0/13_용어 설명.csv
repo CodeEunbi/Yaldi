@@ -1,0 +1,58 @@
+카테고리,설명,비고,버전
+세션 쿠키,"Session Cookie
+사용자 세션을 식별하는 쿠키 (yaldi_session_id)",,
+HttpOnly,"쿠키 속성
+JavaScript로 접근 불가 (XSS 방어)",,
+Secure,"쿠키 속성
+HTTPS에서만 전송",,
+SameSite,"쿠키 속성
+CSRF 공격 방어 (Lax/Strict/None)",,
+세션 저장소,"Redis
+세션 데이터를 저장하는 인메모리 캐시",,
+CSRF 토큰,"Cross-Site Request Forgery 토큰
+변경 작업 시 검증용 토큰",,
+OAuth 2.0,인가(Authorization) 프로토콜,,
+PKCE,"Proof Key for Code Exchange
+OAuth 보안 강화 확장",,
+세션 검증,"세션 유효성 확인
+GET /api/v1/auth/session",,
+RBAC,"Role-Based Access Control
+역할 기반 접근 제어",,
+Permission,"세밀한 권한 (project:read, table:write 등)",,
+Audit Log,모든 API 호출 및 데이터 변경 기록,,
+Activity Log,사용자별 활동 기록,,
+HATEOAS,Hypermedia As The Engine Of Application State,,
+ETag,"Entity Tag
+리소스 버전 식별 해시값",,
+Idempotency,"멱등성
+동일 요청 반복 시 동일 결과",,
+Optimistic Locking,"낙관적 잠금
+ETag로 동시 수정 충돌 방지",,
+API Versioning,"API 버전 관리 (/api/v1, /api/v2)",,
+CORS,Cross-Origin Resource Sharing,,
+CSP,Content Security Policy,,
+HSTS,HTTP Strict Transport Security,,
+XSS,Cross-Site Scripting 공격,,
+CSRF,Cross-Site Request Forgery 공격,,
+SQL Injection,SQL 삽입 공격,,
+Rate Limiting,요청 제한 (DDoS 방어),,
+bcrypt,비밀번호 해싱 알고리즘,,
+TLS 1.3,전송 계층 보안 프로토콜,,
+AES-256,대칭키 암호화 알고리즘,,
+Liveness Probe,프로세스 생존 확인,,
+Readiness Probe,트래픽 수신 준비 확인,,
+Prometheus,메트릭 수집/모니터링 시스템,,
+Grafana,메트릭 시각화 대시보드,,
+ELK Stack,Elasticsearch + Logstash + Kibana,,
+Circuit Breaker,장애 전파 방지 패턴,,
+Service Discovery,서비스 위치 자동 탐색,,
+Saga Pattern,분산 트랜잭션 패턴,,
+OpenAPI 3.0,RESTful API 표준 명세,,
+Swagger UI,OpenAPI 시각화 도구,,
+servers,API 서버 URL 정의,,
+components/schemas,재사용 가능한 데이터 모델,,
+deprecated,더 이상 사용하지 않는 API 표시,,
+ERD,"Entity Relationship Diagram
+개체 관계 다이어그램",,
+DTO,"Data Transfer Object
+데이터 전송 객체",,

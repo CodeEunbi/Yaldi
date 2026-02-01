@@ -1,0 +1,51 @@
+카테고리,설명,비고,버전
+HTTPS/TLS,"TLS 1.2 이상 필수.
+TLS 1.3 권장.
+지원 암호화 스위트: TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256",,
+HTTPS/TLS,"HTTP 요청은 자동으로 HTTPS로 리다이렉트 (301 Moved Permanently).
+HSTS (HTTP Strict Transport Security) 적용: max-age=31536000, includeSubDomains, preload",,
+HTTPS/TLS,"모바일 앱에서 인증서 핀닝으로 중간자 공격(MITM) 방지.
+공개키 해시 검증",,
+TCP 통신,"프로토콜: HTTP/1.1, HTTP/2.
+Connection Timeout: 30초.
+Read Timeout: 60초.
+Keep-Alive: 활성화",,
+TCP 통신,"최대 연결 수: 100.
+Keep-Alive Timeout: 60초.
+Idle Timeout: 5분 (300초)",,
+WebSocket,"프로토콜: wss:// (Secure WebSocket).
+인증: 쿠키(yaldi_session_id) 자동 전송 (브라우저) 또는 헤더 전달.
+세션 검증: 연결 시 세션 ID 검증 및 권한 확인.
+Heartbeat: 30초마다 Ping/Pong",,
+WebSocket,"지수 백오프: 1s → 2s → 4s → 8s → 최대 30s.
+최대 재연결 시도: 5회.
+자동 재연결 활성화",,
+WebSocket,"최대 메시지 크기: 1MB.
+초과 시 413 Payload Too Large 에러 반환",,
+SSE,"프로토콜: HTTPS.
+용도: Viewer의 단방향 실시간 수신.
+재연결: 자동 (5초 후).
+Heartbeat: 60초마다 빈 메시지",,
+SSE,"Event Types: table-created, table-updated, table-deleted, presence-updated, heartbeat",,
+Connection Pool,"REST API Connection Pool: 최대 100개.
+WebSocket 동시 연결: 프로젝트당 24명.
+Keep-Alive Timeout: 60초.
+Idle Connection Timeout: 300초",,
+에러 핸들링,"네트워크 에러 시 최대 3회 재시도 (지수 백오프: 1s → 2s → 4s).
+5xx 에러: 재시도.
+4xx 에러: 재시도 안 함",,
+에러 핸들링,"조건: 5회 연속 실패.
+차단 시간: 30초.
+복구: Half-Open 상태로 1회 테스트 후 복구",,
+에러 핸들링,"Connection Refused: 503 Service Unavailable.
+Timeout 에러: 408 Request Timeout.
+네트워크 연결 확인 메시지 포함",,
+UDP,"Yaldi는 UDP를 사용하지 않습니다.
+모든 통신은 TCP 기반 (HTTP/HTTPS, WebSocket, SSE)입니다.
+UDP는 신뢰성이 보장되지 않아 ERD 편집 및 버전 관리에 적합하지 않음",,
+성능 최적화,"Gzip: 활성화 (텍스트 응답).
+Brotli: 지원 (최신 브라우저).
+압축률: 평균 70% 감소.
+Accept-Encoding: gzip, deflate, br",,
+성능 최적화,"CSS, JavaScript 리소스 자동 푸시.
+초기 로딩 속도 30% 향상",,

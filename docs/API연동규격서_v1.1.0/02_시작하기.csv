@@ -1,0 +1,15 @@
+카테고리,설명,비고,버전
+사전작업,Node.js 환경 데이터베이스(PostgreSQL/MySQL) Redis(Refresh Token 저장소 및 실시간 협업) S3(파일 저장소) 준비 필요,,
+인증방식,"JWT + HttpOnly 쿠키 기반 인증.
+Access Token: 15분, Refresh Token: 7일.
+쿠키(access_token)가 자동으로 전송됨. 별도 헤더 설정 불필요.
+OAuth 2.0 & OIDC 소셜 로그인 지원(Google, GitHub).
+SameSite=Strict로 CSRF 자동 보호",,
+사용순서,"1.
+회원가입/로그인 → 2.
+JWT 토큰 자동 발급 (HttpOnly 쿠키) → 3.
+API 요청 시 쿠키 자동 전송 → 4.
+응답 처리 → 5.
+에러 핸들링",,
+실시간 협업 구조,v1.1.0,,
+소셜 로그인 설정,v1.1.0,,

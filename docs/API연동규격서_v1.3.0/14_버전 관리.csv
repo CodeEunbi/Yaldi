@@ -1,0 +1,10 @@
+카테고리,설명,비고,버전
+변경 이력,"v1.3.0: ERD SQL Export (PostgreSQL, MySQL), WebSocket 실시간 협업 (17개 이벤트), SSE 스트리밍 (뷰어, 알림), 테이블 잠금, 커서 공유, 컬럼 순서 변경
+v1.2.0: AI 기능 (더미데이터, 정규화, 설계 검증), DTO 관리, 테이블 그룹, Name Convention, 댓글/대댓글, Kafka 브로드캐스팅
+v1.1.0: API 설계 표준 12가지 추가 (에러 코드, Pagination, Webhook 등)
+v1.0.0: 초기 릴리스",,v1.3.0
+버전 정보,"Current Version: v1.3.0
+Release Date: 2025-11-16
+API Version: v1",,v1.3.0
+호환성,"v1.3.0은 v1.1.0, v1.2.0의 모든 기능을 포함하며 하위 호환됩니다.
+삭제된 API 없음, 증분 업데이트만 수행",,v1.3.0

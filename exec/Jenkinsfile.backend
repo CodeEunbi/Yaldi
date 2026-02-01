@@ -1,0 +1,253 @@
+pipeline {
+    agent any
+    
+    environment {
+        IMAGE_NAME = 'yaldi-backend'
+        VERSION = "${BUILD_NUMBER}"
+        TARGET_BRANCH = 'master'
+    }
+    
+    options {
+        gitLabConnection('GitLab')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: 'gitlab-token',
+                    url: 'https://lab.ssafy.com/s13-final/S13P31A308.git',
+                    branch: "${TARGET_BRANCH}"
+            }
+        }
+        
+        stage('Check Backend Changes') {
+            steps {
+                script {
+                    try {
+                        def changes = sh(
+                            script: 'git diff --name-only HEAD~1 HEAD | grep "^Back-End/" || true',
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (changes) {
+                            echo "✅ Backend 변경 감지:\n${changes}"
+                            env.BACKEND_CHANGED = 'true'
+                        } else {
+                            echo "⏭️ Backend 변경 없음 (빌드 스킵, 재시작만)"
+                            env.BACKEND_CHANGED = 'false'
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ 첫 빌드"
+                        env.BACKEND_CHANGED = 'true'
+                    }
+                }
+            }
+        }
+        
+        stage('Build Backend') {
+            when {
+                expression { env.BACKEND_CHANGED == 'true' }
+            }
+            steps {
+                dir('Back-End/yaldi') {
+                    sh '''
+                        chmod +x gradlew
+                        ./gradlew build -x test --no-daemon
+                    '''
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            when {
+                expression { env.BACKEND_CHANGED == 'true' }
+            }
+            steps {
+                dir('Back-End/yaldi') {
+                    sh """
+                        docker build -t ${IMAGE_NAME}:${VERSION} .
+                        docker tag ${IMAGE_NAME}:${VERSION} ${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy Backend') {
+            steps {
+                withCredentials([
+                    // Database (필수 3개)
+                    string(credentialsId: 'db-name', variable: 'DB_NAME'),
+                    string(credentialsId: 'db-user', variable: 'DB_USER'),
+                    string(credentialsId: 'db-password', variable: 'DB_PASSWORD'),
+                    
+                    // Redis (필수 1개)
+                    string(credentialsId: 'redis-password', variable: 'REDIS_PASSWORD'),
+                    
+                    // Kafka (선택 1개 - 디폴트 있지만 통일 위해)
+                    string(credentialsId: 'kafka-cluster-id', variable: 'KAFKA_CLUSTER_ID'),
+                    
+                    // elasticsearch (선택 1개)
+                    string(credentialsId: 'elasticsearch-uri', variable: 'ELASTICSEARCH_URI'),
+                    
+                    // JWT (필수 1개)
+                    string(credentialsId: 'jwt-secret', variable: 'JWT_SECRET'),
+                    
+                    // OAuth (필수 7개)
+                    string(credentialsId: 'google-client-id', variable: 'GOOGLE_CLIENT_ID'),
+                    string(credentialsId: 'google-client-secret', variable: 'GOOGLE_CLIENT_SECRET'),
+                    string(credentialsId: 'google-redirect-uri', variable: 'GOOGLE_REDIRECT_URI'),
+                    string(credentialsId: 'github-client-id', variable: 'GITHUB_CLIENT_ID'),
+                    string(credentialsId: 'github-client-secret', variable: 'GITHUB_CLIENT_SECRET'),
+                    string(credentialsId: 'github-redirect-uri', variable: 'GITHUB_REDIRECT_URI'),
+                    string(credentialsId: 'oauth2-redirect-uris', variable: 'OAUTH2_REDIRECT_URIS'),
+                    
+                    // CORS (필수 1개)
+                    string(credentialsId: 'cors-allowed-origins', variable: 'CORS_ALLOWED_ORIGINS'),
+                    
+                    // AWS S3 (필수 3개)
+                    string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY'),
+                    string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_KEY'),
+                    string(credentialsId: 'aws-s3-bucket-name', variable: 'AWS_S3_BUCKET_NAME'),
+                    
+                    // AI Server (필수 1개)
+                    string(credentialsId: 'ai-server-url', variable: 'AI_SERVER_URL'),
+                    
+                    // Mail (선택 2개 - 사용한다면)
+                    string(credentialsId: 'mail-username', variable: 'MAIL_USERNAME'),
+                    string(credentialsId: 'mail-password', variable: 'MAIL_PASSWORD')
+                ]) {
+                    script {
+                        if (env.BACKEND_CHANGED == 'true') {
+                            echo "🚀 새 이미지로 배포 (버전: ${VERSION})"
+                            env.DEPLOY_VERSION = "${VERSION}"
+                        } else {
+                            echo "🔄 기존 이미지로 재시작 (latest 사용)"
+                            env.DEPLOY_VERSION = "latest"
+                        }
+                    }
+                    sh '''
+                        # 버전 설정
+                        export VERSION="$DEPLOY_VERSION"
+                        
+                        # Database
+                        export DB_NAME="$DB_NAME"
+                        export DB_USER="$DB_USER"
+                        export DB_USERNAME="$DB_USER"  # backend용 (DB_USER와 동일)
+                        export DB_PASSWORD="$DB_PASSWORD"
+                        
+                        # Redis
+                        export REDIS_PASSWORD="$REDIS_PASSWORD"
+                        
+                        # Kafka
+                        export KAFKA_CLUSTER_ID="$KAFKA_CLUSTER_ID"
+                        
+                        # elasticsearch
+                        export ELASTICSEARCH_URI="$ELASTICSEARCH_URI"
+                        
+                        # JWT
+                        export JWT_SECRET="$JWT_SECRET"
+                        
+                        # OAuth
+                        export GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID"
+                        export GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET"
+                        export GOOGLE_REDIRECT_URI="$GOOGLE_REDIRECT_URI"
+                        export GITHUB_CLIENT_ID="$GITHUB_CLIENT_ID"
+                        export GITHUB_CLIENT_SECRET="$GITHUB_CLIENT_SECRET"
+                        export GITHUB_REDIRECT_URI="$GITHUB_REDIRECT_URI"
+                        export OAUTH2_REDIRECT_URIS="$OAUTH2_REDIRECT_URIS"
+                        
+                        # CORS
+                        export CORS_ALLOWED_ORIGINS="$CORS_ALLOWED_ORIGINS"
+                        
+                        # AWS S3
+                        export AWS_ACCESS_KEY="$AWS_ACCESS_KEY"
+                        export AWS_SECRET_KEY="$AWS_SECRET_KEY"
+                        export AWS_S3_BUCKET_NAME="$AWS_S3_BUCKET_NAME"
+                        
+                        # AI Server
+                        export AI_SERVER_URL="$AI_SERVER_URL"
+                        
+                        # Mail (선택적)
+                        export MAIL_USERNAME="$MAIL_USERNAME"
+                        export MAIL_PASSWORD="$MAIL_PASSWORD"
+                        
+                        # Backend 중지
+                        docker stop backend 2>/dev/null || true
+                        docker rm backend 2>/dev/null || true
+                        
+                        # Backend 시작
+                        docker compose -f /workspace/docker-compose.yml --profile backend up -d
+                        
+                        echo "⏳ Waiting for backend to start..."
+                        sleep 5
+                        
+                        if docker ps | grep -q backend; then
+                            echo "✅ Backend container is running (이미지: yaldi-backend:$VERSION)"
+                            docker logs backend --tail 30
+                        else
+                            echo "❌ Backend failed to start"
+                            docker logs backend --tail 50
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+        
+        stage('Cleanup Old Tags') {
+            when {
+                expression { env.BACKEND_CHANGED == 'true' }
+            }
+            steps {
+                script {
+                    echo "🧹 오래된 태그 정리 시작..."
+                }
+                sh '''
+                    echo "📋 정리 전:"
+                    docker images yaldi-backend
+                    
+                    echo ""
+                    echo "🗑️ 오래된 태그 삭제 중 (latest + 최근 3개 유지)..."
+                    
+                    TAGS_TO_DELETE=$(docker images yaldi-backend --format "{{.Tag}}" | \
+                      grep -E '^[0-9]+$' | \
+                      sort -rn | \
+                      tail -n +4)
+                    
+                    if [ -n "$TAGS_TO_DELETE" ]; then
+                        echo "$TAGS_TO_DELETE" | while read tag; do
+                            echo "  삭제: yaldi-backend:$tag"
+                            docker rmi yaldi-backend:$tag 2>/dev/null || echo "    → 삭제 실패 (무시)"
+                        done
+                    else
+                        echo "  삭제할 태그 없음"
+                    fi
+                    
+                    echo ""
+                    echo "📋 정리 후:"
+                    docker images yaldi-backend
+                    
+                    echo "✅ 정리 완료!"
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                if (env.BACKEND_CHANGED == 'true') {
+                    echo "✅ Backend 빌드 + 배포 + 정리 완료! (Build #${VERSION})"
+                } else {
+                    echo "✅ Backend 재시작 완료! (latest 이미지 사용)"
+                }
+            }
+            updateGitlabCommitStatus name: 'jenkins', state: 'success'
+
+        }
+        failure {
+            echo "❌ Backend 배포 실패!"
+            updateGitlabCommitStatus name: 'jenkins', state: 'failed'
+        }
+    }
+}

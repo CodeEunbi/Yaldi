@@ -1,0 +1,28 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# HTTP Client (openai 의존성)
+httpx==0.26.0
+
+# LLM & AI
+openai==1.10.0
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-community>=0.0.20
+langgraph>=0.0.26
+langsmith>=0.1.0
+
+# Database Drivers
+asyncpg==0.29.0
+aiomysql==0.2.0
+cryptography==41.0.7
+neo4j==5.16.0
+
+# Validation & Parsing
+sqlparse==0.4.4
+
+# Environment
+python-dotenv==1.0.1

@@ -1,0 +1,17 @@
+카테고리,설명,비고,버전
+Health Check,"Liveness Probe: /api/v1/health (프로세스 생존 확인)
+Readiness Probe: /api/v1/ready (트래픽 수신 준비)
+의존성 체크: database, redis, s3",,
+Metrics & Monitoring,"성능 지표: p50 < 100ms, p95 < 500ms, p99 < 1000ms
+처리량: > 1000 req/s
+에러율: < 0.1%
+모니터링 스택: Prometheus + Grafana / CloudWatch / Datadog",,
+Logging 구조,"구조화된 로그 (JSON)
+로그 레벨: ERROR, WARN, INFO, DEBUG
+중앙 집중식: ELK Stack / Loki
+분산 추적: OpenTelemetry / Jaeger / Zipkin",,
+Microservice 패턴,"API Gateway: 단일 진입점, 라우팅
+Service Discovery: 서비스 위치 자동 탐색
+Circuit Breaker: 장애 전파 방지
+서비스 간 통신: gRPC (내부), REST (외부)
+비동기 메시징: Kafka, RabbitMQ",,

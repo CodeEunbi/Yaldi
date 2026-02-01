@@ -1,0 +1,84 @@
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yaldi-ai-service
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - APP_NAME=Yaldi AI Service
+      - APP_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - HOST=0.0.0.0
+      - PORT=8000
+      - TEST_POSTGRES_URL=postgresql://test:test@test-postgres:5432/test_validation
+      - TEST_MYSQL_URL=mysql://test:test@test-mysql:3306/test_validation
+    depends_on:
+      - test-postgres
+      - test-mysql
+      - neo4j
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - yaldi-network
+    restart: unless-stopped
+
+  test-postgres:
+    image: postgres:15-alpine
+    container_name: yaldi-test-postgres
+    tmpfs:  # 메모리에만 저장 (빠르고 휘발성)
+      - /var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test
+      - POSTGRES_DB=test_validation
+    networks:
+      - yaldi-network
+    restart: unless-stopped
+
+  test-mysql:
+    image: mysql:8
+    container_name: yaldi-test-mysql
+    tmpfs:  # 메모리에만 저장 (빠르고 휘발성)
+      - /var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=test
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=test
+      - MYSQL_DATABASE=test_validation
+    volumes:
+      - ./docker/mysql-init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - yaldi-network
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: yaldi-neo4j
+    ports:
+      - "7474:7474"  # Browser UI
+      - "7687:7687"  # Bolt protocol
+    environment:
+      - NEO4J_AUTH=neo4j/yaldi308  # username/password
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=2G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - yaldi-network
+    restart: unless-stopped
+
+networks:
+  yaldi-network:
+    driver: bridge
+
+volumes:
+  neo4j_data:
+  neo4j_logs:

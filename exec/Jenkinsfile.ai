@@ -1,0 +1,198 @@
+pipeline {
+    agent any
+    
+    environment {
+        IMAGE_NAME = 'yaldi-fastapi'
+        VERSION = "${BUILD_NUMBER}"
+        TARGET_BRANCH = 'master'
+    }
+    
+    options {
+        gitLabConnection('GitLab')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: 'gitlab-token',
+                    url: 'https://lab.ssafy.com/s13-final/S13P31A308.git',
+                    branch: "${TARGET_BRANCH}"
+            }
+        }
+        
+        stage('Check AI Changes') {
+            steps {
+                script {
+                    try {
+                        def changes = sh(
+                            script: 'git diff --name-only HEAD~1 HEAD | grep "^AI/" || true',
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (changes) {
+                            echo "✅ AI 변경 감지:\n${changes}"
+                            env.AI_CHANGED = 'true'
+                        } else {
+                            echo "⏭️ AI 변경 없음 (빌드 스킵, 재시작만)"
+                            env.AI_CHANGED = 'false'
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ 첫 빌드"
+                        env.AI_CHANGED = 'true'
+                    }
+                }
+            }
+        }
+        
+        stage('Build FastAPI') {
+            when {
+                expression { env.AI_CHANGED == 'true' }
+            }
+            steps {
+                dir('AI/yaldi') {
+                    sh """
+                        echo "🐳 Building FastAPI Docker image..."
+                        docker build -t ${IMAGE_NAME}:${VERSION} .
+                        docker tag ${IMAGE_NAME}:${VERSION} ${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy FastAPI') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'gms-api-key', variable: 'GMS_API_KEY'),
+                    string(credentialsId: 'fastapi-backend-api-key', variable: 'FASTAPI_BACKEND_API_KEY')
+                ]) {
+                    script {
+                        // ⭐ Backend와 동일한 버전 관리 로직
+                        if (env.AI_CHANGED == 'true') {
+                            echo "🚀 새 이미지로 배포 (버전: ${VERSION})"
+                            env.DEPLOY_VERSION = "${VERSION}"
+                        } else {
+                            echo "🔄 기존 이미지로 재시작 (latest 사용)"
+                            env.DEPLOY_VERSION = "latest"
+                        }
+                    }
+                    sh '''
+                        echo "🚀 Deploy FastAPI (이미지: yaldi-fastapi:$DEPLOY_VERSION)..."
+                        
+                        # 버전 설정
+                        export AI_VERSION="$DEPLOY_VERSION"
+                        
+                        # 필수 환경변수 (민감 정보)
+                        export GMS_API_KEY="$GMS_API_KEY"
+                        export FASTAPI_BACKEND_API_KEY="$FASTAPI_BACKEND_API_KEY"
+                        
+                        # 나머지는 docker-compose.yml에 기본값 있음!
+                        
+                        # FastAPI 중지
+                        docker stop fastapi 2>/dev/null || true
+                        docker rm fastapi 2>/dev/null || true
+                        
+                        # FastAPI 시작
+                        docker compose -f /workspace/docker-compose.yml --profile ai up -d
+                        
+                        echo "⏳ Waiting for FastAPI to start..."
+                        sleep 5
+                        
+                        if docker ps | grep -q fastapi; then
+                            echo "✅ FastAPI container is running (이미지: yaldi-fastapi:$DEPLOY_VERSION)"
+                            docker logs fastapi --tail 30
+                        else
+                            echo "❌ FastAPI failed to start"
+                            docker logs fastapi --tail 50
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                    echo "🏥 FastAPI Health Check..."
+                    sleep 5
+                    
+                    # Health check (컨테이너 내부에서)
+                    MAX_RETRIES=5
+                    RETRY_COUNT=0
+                    
+                    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                        if docker exec fastapi curl -f http://localhost:8000/health 2>/dev/null; then
+                            echo "✅ FastAPI Health Check 성공"
+                            exit 0
+                        elif docker exec fastapi wget -q --spider http://localhost:8000/health 2>/dev/null; then
+                            echo "✅ FastAPI Health Check 성공 (wget)"
+                            exit 0
+                        else
+                            RETRY_COUNT=$((RETRY_COUNT + 1))
+                            echo "⏳ Health Check 재시도 ($RETRY_COUNT/$MAX_RETRIES)..."
+                            sleep 3
+                        fi
+                    done
+                    
+                    echo "⚠️ Health Check 실패 (컨테이너는 실행 중)"
+                    docker logs fastapi --tail 30
+                '''
+            }
+        }
+        
+        stage('Cleanup Old Tags') {
+            when {
+                expression { env.AI_CHANGED == 'true' }
+            }
+            steps {
+                script {
+                    echo "🧹 오래된 태그 정리 시작..."
+                }
+                sh '''
+                    echo "📋 정리 전:"
+                    docker images yaldi-fastapi
+                    
+                    echo ""
+                    echo "🗑️ 오래된 태그 삭제 중 (latest + 최근 3개 유지)..."
+                    
+                    TAGS_TO_DELETE=$(docker images yaldi-fastapi --format "{{.Tag}}" | \
+                      grep -E '^[0-9]+$' | \
+                      sort -rn | \
+                      tail -n +4)
+                    
+                    if [ -n "$TAGS_TO_DELETE" ]; then
+                        echo "$TAGS_TO_DELETE" | while read tag; do
+                            echo "  삭제: yaldi-fastapi:$tag"
+                            docker rmi yaldi-fastapi:$tag 2>/dev/null || echo "    → 삭제 실패 (무시)"
+                        done
+                    else
+                        echo "  삭제할 태그 없음"
+                    fi
+                    
+                    echo ""
+                    echo "📋 정리 후:"
+                    docker images yaldi-fastapi
+                    
+                    echo "✅ 정리 완료!"
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                if (env.AI_CHANGED == 'true') {
+                    echo "✅ AI 빌드 + 배포 + 정리 완료! (Build #${VERSION})"
+                } else {
+                    echo "✅ AI 재시작 완료! (latest 이미지 사용)"
+                }
+            }
+            updateGitlabCommitStatus name: 'jenkins-ai', state: 'success'
+        }
+        failure {
+            echo "❌ AI 배포 실패!"
+            updateGitlabCommitStatus name: 'jenkins-ai', state: 'failed'
+        }
+    }
+}

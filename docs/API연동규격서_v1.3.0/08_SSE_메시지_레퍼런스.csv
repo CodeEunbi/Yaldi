@@ -1,0 +1,97 @@
+카테고리,이벤트타입,방향,전송방식,설명,이벤트데이터,예제응답,비고,구현예시,버전
+SSE 메타,-,-,-,SSE 엔드포인트,"/api/v1/viewer/{linkId}/stream (뷰어, 인증 불필요)
+/api/v1/notifications/stream (알림, JWT 인증 필요)",,,"Content-Type: text/event-stream
+Heartbeat: 30초마다
+타임아웃: 무제한","// EventSource 사용 (표준)
+const eventSource = new EventSource('/api/v1/viewer/abc123def/stream');
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received:', data);
+};
+
+// 특정 이벤트 타입 처리
+eventSource.addEventListener('erd-update', (event) => {
+  const data = JSON.parse(event.data);
+  handleErdUpdate(data);
+});
+
+// 인증이 필요한 경우 (알림)
+const authEventSource = new EventSource('/api/v1/notifications/stream', {
+  withCredentials: true // 쿠키 포함
+});",v1.3.0
+뷰어,heartbeat,서버→클라이언트,SSE,연결 유지 heartbeat,"{ ""timestamp"": ""2025-11-16T10:30:00Z"" }","event: heartbeat
+data: {""timestamp"":""2025-11-16T10:30:00Z""}",30초마다 자동 전송. 클라이언트 연결 확인용.,"eventSource.addEventListener('heartbeat', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Heartbeat:', data.timestamp);
+  lastHeartbeat = Date.now();
+});
+
+// Heartbeat 타임아웃 체크
+setInterval(() => {
+  if (Date.now() - lastHeartbeat > 60000) {
+    console.warn('No heartbeat for 60s, reconnecting...');
+    eventSource.close();
+    reconnect();
+  }
+}, 10000);",v1.3.0
+뷰어,erd-update,서버→클라이언트,SSE,ERD 업데이트 이벤트,"{ ""type"": ""TABLE_CREATE"", ""data"": { ""tableKey"": 1, ""logicalName"": ""회원"", ""physicalName"": ""members"" } }","event: erd-update
+data: {""type"":""TABLE_CREATE"",""data"":{""tableKey"":1,""logicalName"":""회원""}}","뷰어링크로 접속한 사용자에게 ERD 변경사항 전송. type: TABLE_CREATE, TABLE_UPDATE, TABLE_DELETE, COLUMN_CREATE, COLUMN_UPDATE, COLUMN_DELETE, RELATION_CREATE, RELATION_UPDATE, RELATION_DELETE","eventSource.addEventListener('erd-update', (event) => {
+  const update = JSON.parse(event.data);
+  
+  switch(update.type) {
+    case 'TABLE_CREATE':
+      canvas.addTable(update.data);
+      break;
+    case 'TABLE_UPDATE':
+      canvas.updateTable(update.data.tableKey, update.data);
+      break;
+    case 'TABLE_DELETE':
+      canvas.removeTable(update.data.tableKey);
+      break;
+    case 'COLUMN_CREATE':
+      canvas.addColumn(update.data);
+      break;
+    // ... 기타 처리
+  }
+});",v1.3.0
+알림,notification,서버→클라이언트,SSE,사용자 알림,"{ ""notificationKey"": 1, ""type"": ""PROJECT_INVITE"", ""message"": ""프로젝트에 초대되었습니다"", ""data"": { ""projectKey"": 100, ""inviterName"": ""홍길동"" }, ""createdAt"": ""2025-11-16T10:30:00Z"" }","event: notification
+data: {""notificationKey"":1,""type"":""PROJECT_INVITE"",""message"":""프로젝트에 초대되었습니다""}","type: PROJECT_INVITE, MEMBER_JOIN, COMMENT_REPLY, MENTION 등. 읽음 처리는 별도 API 호출 필요.","eventSource.addEventListener('notification', (event) => {
+  const notification = JSON.parse(event.data);
+  
+  // 알림 표시
+  showNotification(notification.message);
+  
+  // 타입별 처리
+  if (notification.type === 'PROJECT_INVITE') {
+    showInviteModal(notification.data);
+  }
+  
+  // 알림 배지 업데이트
+  updateNotificationBadge();
+});",v1.3.0
+에러,error,서버→클라이언트,SSE,SSE 연결 에러,"{ ""code"": ""ERR404"", ""message"": ""유효하지 않거나 만료된 링크입니다"" }","event: error
+data: {""code"":""ERR404"",""message"":""유효하지 않거나 만료된 링크입니다""}","연결 에러 발생 시 전송 후 연결 종료. 클라이언트는 재연결 시도.","eventSource.onerror = (error) => {
+  console.error('SSE Error:', error);
+  
+  if (eventSource.readyState === EventSource.CLOSED) {
+    console.log('Connection closed, attempting reconnect...');
+    setTimeout(reconnect, 3000);
+  }
+};
+
+// 재연결 로직 (Exponential Backoff)
+let reconnectDelay = 1000;
+const maxDelay = 30000;
+
+function reconnect() {
+  eventSource = new EventSource(url);
+  setupEventListeners(eventSource);
+  
+  reconnectDelay = Math.min(reconnectDelay * 2, maxDelay);
+  
+  eventSource.onopen = () => {
+    console.log('Reconnected successfully');
+    reconnectDelay = 1000; // 재연결 성공 시 리셋
+  };
+}",v1.3.0

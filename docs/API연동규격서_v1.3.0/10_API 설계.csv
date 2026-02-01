@@ -1,0 +1,127 @@
+카테고리,설명,비고,버전
+에러 코드 체계,"HTTP 상태 코드와 함께 서비스별 에러 코드 제공
+AUTH_xxx: 인증/인가 에러
+PROJ_xxx: 프로젝트 관련 에러
+ERD_xxx: ERD 관련 에러
+RATE_xxx: Rate Limit 에러
+FILE_xxx: 파일 관련 에러
+VALID_xxx: 입력 검증 에러
+SYS_xxx: 시스템 에러","디버깅 및 에러 추적 용이
+클라이언트에서 에러 타입별 처리 가능",v1.1.0
+에러 코드 목록 - 인증,"AUTH_001: 잘못된 인증 정보 (401)
+AUTH_002: 토큰 만료 (401)
+AUTH_003: 권한 없음 (403)
+AUTH_004: 이메일 인증 필요 (403)",에러 코드로 세밀한 에러 처리,v1.1.0
+에러 코드 목록 - 리소스,"PROJ_001: 프로젝트 없음 (404)
+PROJ_002: 프로젝트 이름 중복 (409)
+ERD_001: 테이블 없음 (404)
+ERD_002: 컬럼 없음 (404)
+ERD_003: 관계 없음 (404)
+ERD_004: 순환 참조 발생 (400)",리소스별 명확한 에러 구분,v1.1.0
+에러 코드 목록 - 시스템,"RATE_001: Rate Limit 초과 (429)
+FILE_001: 파일 크기 초과 (413)
+FILE_002: 지원하지 않는 파일 형식 (400)
+VALID_001: 입력값 검증 실패 (400)
+SYS_001: 내부 서버 에러 (500)
+SYS_002: 데이터베이스 연결 실패 (500)
+SYS_003: 외부 서비스 연결 실패 (502)",시스템 에러 세분화,v1.1.0
+에러 응답 예시,"{ ""success"": false, ""error"": { ""code"": ""ERD_004"", ""type"": ""CircularReferenceError"", ""message"": ""순환 참조가 발생했습니다"", ""field"": ""relations"", ""details"": { ""cycle"": [""tbl_users"", ""tbl_posts"", ""tbl_comments"", ""tbl_users""] }, ""timestamp"": ""2024-10-18T10:00:00Z"", ""requestId"": ""req_abc123"" } }",상세한 에러 정보 제공,v1.1.0
+Pagination 표준,"Offset-based (기본): page, limit, sort 파라미터
+Cursor-based (대용량): cursor, limit 파라미터
+응답 형식: { data, pagination: { page, limit, total, totalPages, hasNext, hasPrev, nextCursor, prevCursor } }",2가지 페이지네이션 방식 지원,v1.1.0
+Pagination 응답 예시,"{ ""data"": [...], ""pagination"": { ""page"": 2, ""limit"": 20, ""total"": 156, ""totalPages"": 8, ""hasNext"": true, ""hasPrev"": true, ""nextCursor"": ""eyJpZCI6MTIzfQ=="", ""prevCursor"": ""eyJpZCI6MTAwfQ=="" } }",상세한 페이지네이션 정보,v1.1.0
+필터링 쿼리 표준,"형식: filter[field][operator]=value
+연산자: eq, ne, gt, gte, lt, lte, in, like, between
+예시: filter[status]=active&filter[createdAt][gte]=2024-01-01",복잡한 쿼리 조건 지원,v1.1.0
+정렬 쿼리 표준,"오름차순: sort=field
+내림차순: sort=-field
+다중 정렬: sort=-createdAt,name",,v1.1.0
+검색 쿼리 표준,"전체 검색: search=keyword
+필드 선택: fields=id,name,createdAt
+관계 포함: include=owner,members",,v1.1.0
+Idempotency Key,"POST 요청에 Idempotency-Key 헤더 포함
+동일 키로 재요청 시 이전 결과 반환
+키 형식: UUID v4
+유효 기간: 24시간
+재요청 시 응답 헤더: Idempotent-Replayed: true",중복 생성 방지,v1.1.0
+Webhook 이벤트 시스템,"이벤트 발생 시 등록된 URL로 POST 요청
+HMAC-SHA256 서명으로 무결성 검증
+재시도 정책: 3회 (exponential backoff: 1s, 2s, 4s)
+타임아웃: 5초",실시간 이벤트 알림,v1.1.0
+Webhook 이벤트 타입,"project.created/updated/deleted
+table.created/updated/deleted
+relation.created/deleted
+export.completed
+version.created",,v1.1.0
+Webhook Payload 형식,"{ ""id"": ""evt_abc123"", ""type"": ""table.created"", ""timestamp"": ""2024-10-18T10:00:00Z"", ""data"": { ""projectId"": ""prj_123"", ""tableId"": ""tbl_456"", ""tableName"": ""users"" }, ""signature"": ""sha256=abc123..."" }",,v1.1.0
+Webhook 서명 검증,"HMAC-SHA256(payload, secret) 검증
+서명 헤더: X-Webhook-Signature
+재전송 공격 방지: 타임스탬프 5분 이내 검증",보안 강화,v1.1.0
+Rate Limiting 정책,"토큰 버킷 알고리즘
+인증된 사용자: 1000 req/hour
+미인증 사용자: 100 req/hour
+Export API: 10 req/hour
+Webhook: 1000 events/hour",DDoS 방어,v1.1.0
+Rate Limit 엔드포인트별 정책,"GET /api/v1/projects: 1000/hour
+POST /api/v1/projects: 100/hour
+POST /api/v1/auth/login: 20/hour (무차별 대입 공격 방어)",,v1.1.0
+Rate Limit 응답 헤더,"X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 873
+X-RateLimit-Reset: 1697619600
+Retry-After: 3600",,v1.1.0
+Rate Limit 초과 응답,"429 Too Many Requests
+{ ""success"": false, ""error"": { ""code"": ""RATE_001"", ""message"": ""요청 한도를 초과했습니다.
+1시간 후 다시 시도하세요"", ""retryAfter"": 3600 } }",,v1.1.0
+Batch API 설계,"여러 요청을 하나로 묶어 처리
+최대 100개 요청/배치
+의존성 지원 (이전 요청 결과 참조)
+Atomic 옵션: 전체 성공 또는 전체 실패",네트워크 왕복 최소화,v1.1.0
+Batch 요청 형식,"{ ""requests"": [ { ""id"": ""req1"", ""method"": ""POST"", ""url"": ""/api/v1/tables"", ""body"": { ""name"": ""users"" } }, { ""id"": ""req2"", ""method"": ""POST"", ""url"": ""/api/v1/columns"", ""body"": { ""tableId"": ""${req1.response.data.tableId}"", ""name"": ""id"" }, ""dependsOn"": [""req1""] } ], ""options"": { ""atomic"": false } }",,v1.1.0
+Batch 응답 형식,"{ ""responses"": [ { ""id"": ""req1"", ""status"": 201, ""body"": { ""success"": true, ""data"": { ""tableId"": ""tbl_123"" } } }, { ""id"": ""req2"", ""status"": 201, ""body"": { ""success"": true, ""data"": { ""columnId"": ""col_456"" } } } ] }",,v1.1.0
+API 버전 관리,"URI 버전 관리: /api/v1, /api/v2
+Major 버전만 URI에 포함
+Minor/Patch는 하위 호환",버전 관리 전략,v1.1.0
+API Deprecation 정책,"3단계 프로세스: (1) 발표 (6개월 전) → (2) Deprecated → (3) Sunset
+응답 헤더: Deprecation: true, Sunset: Sat 01 Jan 2025 00:00:00 GMT
+대체 API 정보: Link: </api/v2/projects>; rel=""successor-version""",,v1.1.0
+API Versioning 전략,"Breaking Changes (v1→v2): 데이터 구조 변경, 필수 필드 추가, 엔드포인트 경로 변경
+Non-Breaking (v1.1, v1.2): 선택 필드 추가, 새 엔드포인트 추가, 버그 수정",,v1.1.0
+SLA (Service Level Agreement),"가용성: 99.9% uptime (월 43분 다운타임 허용)
+응답 시간: p50 < 100ms, p95 < 300ms, p99 < 1000ms
+에러율: < 0.1%
+지원 시간: 평일 09:00-18:00 KST
+긴급 장애: 1시간 내 대응",서비스 수준 약정,v1.1.0
+SLO (Service Level Objective),"GET /api/v1/projects: p95 < 200ms
+POST /api/v1/tables: p95 < 500ms
+WebSocket 연결: < 1초
+Export API: < 30초",,v1.1.0
+SLA 위반 시 보상,"월 가용성 < 99.9%: 서비스 크레딧 10%
+월 가용성 < 99.0%: 서비스 크레딧 25%
+월 가용성 < 95.0%: 서비스 크레딧 50%",,v1.1.0
+모니터링 및 Status Page,"Status Page: https://status.yaldi.io
+Uptime 모니터링: Pingdom
+메트릭 수집: Prometheus + Grafana",,v1.1.0
+JSON Schema 정의,"자동 검증 라이브러리: ajv
+Request 검증: 클라이언트 요청 자동 검증
+Response 검증: 개발 환경에서 응답 형식 검증
+TypeScript 타입 생성: json-schema-to-typescript",스키마 기반 검증,v1.1.0
+JSON Schema 활용,"Project: { type: ""object"", properties: { name: { type: ""string"", minLength: 1, maxLength: 100 }, database: { enum: [""postgresql"", ""mysql"", ""mariadb""] } }, required: [""name"", ""database""] }",,v1.1.0
+Request/Response 압축,"gzip 압축 지원
+요청 압축: Content-Encoding: gzip
+응답 압축: Accept-Encoding: gzip, deflate
+최소 크기: 1KB 이상만 압축
+압축률: 평균 70-80% 감소
+제외 대상: 이미지, 동영상",네트워크 대역폭 절약,v1.1.0
+압축 응답 헤더,"Content-Encoding: gzip
+Vary: Accept-Encoding
+Content-Length: 1234
+X-Uncompressed-Size: 5678",,v1.1.0
+CORS 정책 상세,"허용 Origin: https://yaldi.io, https://app.yaldi.io, http://localhost:3000
+허용 Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+허용 Headers: Authorization, Content-Type, X-Requested-With, Idempotency-Key
+노출 Headers: X-RateLimit-*, X-Request-ID
+Credentials: true
+Preflight 캐시: 86400초 (24시간)",도메인 간 API 호출 허용,v1.1.0
+CORS Preflight,"OPTIONS 요청: 모든 엔드포인트에서 지원
+응답 헤더: Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Max-Age
+인증 불필요",,v1.1.0

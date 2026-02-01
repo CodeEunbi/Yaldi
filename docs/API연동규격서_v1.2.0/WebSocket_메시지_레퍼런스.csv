@@ -1,0 +1,172 @@
+카테고리,도메인,entity,메시지타입,방향,설명,요청데이터,응답데이터,예제요청,예제응답,비고,구현예시,버전
+Metadata,project,"projects, users, project_member_relations",WebSocket 연결 URL,-,WebSocket 엔드포인트,wss://api.yaldi.kr/ws/projects/{projectId},,,,Path Parameter: projectId (필수),"// 개발 환경
+const ws = new WebSocket('ws://localhost:8080/ws/projects/123');
+
+// 운영 환경
+const ws = new WebSocket('wss://api.yaldi.kr/ws/projects/123');",v1.0
+Metadata,project,"projects, users, project_member_relations",보안 정책,-,WebSocket 보안 및 제한,,,,,Rate Limit: 초당 10개. Max Message Size: 1MB. 동시 접속: 프로젝트당 24명. Owner/Editor만 WebSocket 허용,"// Rate Limiting 클라이언트 구현
+class RateLimiter {
+  constructor(maxPerSecond = 10) {
+    this.max = maxPerSecond;
+    this.queue = [];
+  }
+  
+  send(message) {
+    const now = Date.now();
+    this.queue = this.queue.filter(t => now - t < 1000);
+    
+    if (this.queue.length >= this.max) {
+      console.warn('Rate limit exceeded');
+      return false;
+    }
+    
+    this.queue.push(now);
+    ws.send(JSON.stringify(message));
+    return true;
+  }
+}",v1.0
+Metadata,project,"projects, users, project_member_relations",연결 관리,-,WebSocket 연결 생명주기,,,,,Heartbeat: 30초 Ping/Pong. 60초 미응답 시 연결 종료. 재연결 시 Exponential Backoff 권장,"class WebSocketClient {
+  connect() {
+    this.ws = new WebSocket(url);
+    this.ws.onopen = () => this.onConnect();
+    this.ws.onclose = () => this.reconnect();
+    this.ws.onerror = (err) => console.error(err);
+    this.startHeartbeat();
+  }
+  
+  startHeartbeat() {
+    this.pingInterval = setInterval(() => {
+      this.ws.send(JSON.stringify({
+        type: 'ping',
+        data: { timestamp: new Date().toISOString() }
+      }));
+    }, 30000);
+  }
+  
+  reconnect() {
+    clearInterval(this.pingInterval);
+    const delay = Math.min(1000 * Math.pow(2, this.retries), 30000);
+    setTimeout(() => this.connect(), delay);
+  }
+}",v1.0
+Metadata,project,"projects, users, project_member_relations",인증 방법,-,WebSocket 연결 인증,,,,,방법1(권장): Cookie (브라우저 자동 전송). 방법2: Query Parameter ?token=xxx (모바일),"// 방법 1: 쿠키 인증 (권장 - 브라우저)
+const ws = new WebSocket('wss://api.yaldi.kr/ws/projects/123');
+// 브라우저가 자동으로 access_token 쿠키 전송
+
+// 방법 2: Query Parameter (모바일/비브라우저)
+const token = getAccessToken();
+const ws = new WebSocket(`wss://api.yaldi.kr/ws/projects/123?token=${token}`);",v1.0
+Connection,project,"projects, users, project_member_relations",connection.error,서버→클라이언트,WebSocket 연결 실패,연결 실패 시 자동 전송,"{ ""code"": 4001|4003|4004|4429, ""message"": ""string"", ""closeCode"": number }",연결 실패 시 자동 전송,"{ ""type"": ""connection.error"", ""data"": { ""code"": 4003, ""message"": ""프로젝트 편집 권한이 없습니다. Viewer는 SSE를 사용하세요."", ""closeCode"": 4003 } }","에러 코드: 4001(Unauthorized), 4003(Forbidden), 4004(Not Found), 4429(Too Many Connections)",,v1.0
+Connection,project,"projects, users, project_member_relations",connection.established,서버→클라이언트,WebSocket 연결 성공,자동 전송 (연결 시),"{ ""sessionId"": ""string"", ""projectId"": ""string"", ""userId"": ""string"", ""role"": ""OWNER|EDITOR|VIEWER"", ""onlineUsers"": [{ ""userKey"": number, ""nickname"": ""string"", ""status"": ""EDITING|IDLE"", ""cursor"": { ""x"": number, ""y"": number } }], ""serverTime"": ""ISO 8601"" }",연결 시 자동 전송,"{ ""type"": ""connection.established"", ""data"": { ""sessionId"": ""sess_abc123"", ""projectId"": ""prj_123"", ""userId"": ""usr_456"", ""role"": ""EDITOR"", ""onlineUsers"": [{ ""userKey"": 123, ""nickname"": ""user1"", ""status"": ""EDITING"", ""cursor"": { ""x"": 100, ""y"": 200 } }], ""serverTime"": ""2024-10-18T12:00:00Z"" } }",연결 성공 시 첫 메시지. Owner/Editor만 연결 가능. Viewer는 SSE 사용.,"// 연결 성공 처리
+ws.onopen = () => {
+  console.log('WebSocket 연결됨');
+};
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'connection.established') {
+    console.log('세션 ID:', msg.data.sessionId);
+    console.log('현재 접속자:', msg.data.onlineUsers);
+  }
+};",v1.0
+Connection,project,"projects, users, project_member_relations",ping,클라이언트→서버,Heartbeat 핑,"{ ""timestamp"": ""ISO 8601"" }","{ ""timestamp"": ""ISO 8601"" }","{ ""type"": ""ping"", ""data"": { ""timestamp"": ""2024-10-18T12:00:30Z"" } }","{ ""type"": ""pong"", ""data"": { ""timestamp"": ""2024-10-18T12:00:30Z"" } }",30초마다 클라이언트가 전송. 60초 동안 미수신 시 연결 종료.,"// 30초마다 Ping 전송
+setInterval(() => {
+  ws.send(JSON.stringify({
+    type: 'ping',
+    data: { timestamp: new Date().toISOString() }
+  }));
+}, 30000);",v1.0
+Connection,project,"projects, users, project_member_relations",pong,서버→클라이언트,Heartbeat 응답,자동 응답,"{ ""timestamp"": ""ISO 8601"" }",자동 응답,"{ ""type"": ""pong"", ""data"": { ""timestamp"": ""2024-10-18T12:00:30Z"" } }",ping에 대한 자동 응답,,v1.0
+Operation,erd,"erd_columns, erd_tables, users, edit_history",column.create,클라이언트→서버,컬럼 생성,"{ ""op"": ""column.create"", ""payload"": { ""tableKey"": number, ""logicalName"": ""string"", ""physicalName"": ""string"", ""dataType"": ""string"", ""dataDetail"": [""string""], ""isPrimaryKey"": boolean, ""isNullable"": boolean, ""isUnique"": boolean, ""isIncremental"": boolean, ""defaultValue"": ""string|null"", ""comment"": ""string"" } }","{ ""op"": ""column.create"", ""operationId"": ""string"", ""userId"": ""string"", ""result"": { ""columnKey"": number, ""tableKey"": number, ""logicalName"": ""string"", ""physicalName"": ""string"", ""dataType"": ""string"", ""isPrimaryKey"": boolean, ""createdAt"": ""ISO 8601"" } }","{ ""type"": ""operation.send"", ""requestId"": ""req_126"", ""data"": { ""op"": ""column.create"", ""payload"": { ""tableKey"": 789, ""logicalName"": ""아이디"", ""physicalName"": ""id"", ""dataType"": ""INTEGER"", ""dataDetail"": [], ""isPrimaryKey"": true, ""isNullable"": false, ""isUnique"": true, ""isIncremental"": true, ""defaultValue"": null, ""comment"": ""사용자 고유 ID"" } } }","{ ""type"": ""operation.applied"", ""requestId"": ""req_126"", ""data"": { ""op"": ""column.create"", ""operationId"": ""op_jkl345"", ""userId"": ""usr_123"", ""result"": { ""columnKey"": 456, ""tableKey"": 789, ""logicalName"": ""아이디"", ""physicalName"": ""id"", ""dataType"": ""INTEGER"", ""isPrimaryKey"": true, ""createdAt"": ""2024-10-18T12:03:00Z"" } } }","dataDetail: varchar(255)의 경우 [""255""], decimal(10,2)의 경우 [""10"",""2""]",,v1.0
+Operation,erd,"erd_columns, erd_tables, users, edit_history",column.delete,클라이언트→서버,컬럼 삭제,"{ ""op"": ""column.delete"", ""payload"": { ""columnKey"": number } }","{ ""op"": ""column.delete"", ""operationId"": ""string"", ""userId"": ""string"", ""result"": { ""columnKey"": number, ""deletedAt"": ""ISO 8601"" } }","{ ""type"": ""operation.send"", ""requestId"": ""req_128"", ""data"": { ""op"": ""column.delete"", ""payload"": { ""columnKey"": 456 } } }","{ ""type"": ""operation.applied"", ""requestId"": ""req_128"", ""data"": { ""op"": ""column.delete"", ""operationId"": ""op_pqr901"", ""userId"": ""usr_123"", ""result"": { ""columnKey"": 456, ""deletedAt"": ""2024-10-18T12:05:00Z"" } } }",Soft delete. PK/FK인 경우 관련 관계도 함께 삭제됨.,,v1.0
+Operation,erd,"erd_columns, erd_tables, users, edit_history",column.update,클라이언트→서버,컬럼 수정,"{ ""op"": ""column.update"", ""payload"": { ""columnKey"": number, ""changes"": { ""logicalName"": ""string"", ""physicalName"": ""string"", ""dataType"": ""string"", ""comment"": ""string"", ... } } }","{ ""op"": ""column.update"", ""operationId"": ""string"", ""userId"": ""string"", ""result"": { ""columnKey"": number, ""changes"": object, ""updatedAt"": ""ISO 8601"" } }","{ ""type"": ""operation.send"", ""requestId"": ""req_127"", ""data"": { ""op"": ""column.update"", ""payload"": { ""columnKey"": 456, ""changes"": { ""logicalName"": ""사용자 아이디"", ""comment"": ""회원 고유 식별자"" } } } }","{ ""type"": ""operation.applied"", ""requestId"": ""req_127"", ""data"": { ""op"": ""column.update"", ""operationId"": ""op_mno678"", ""userId"": ""usr_123"", ""result"": { ""columnKey"": 456, ""changes"": { ""logicalName"": ""사용자 아이디"", ""comment"": ""회원 고유 식별자"" }, ""updatedAt"": ""2024-10-18T12:04:00Z"" } } }",변경할 필드만 포함,,v1.0
+Operation,erd,"erd_tables, erd_columns, erd_relations, edit_history, users",operation.applied,서버→클라이언트,작업 적용 완료 (브로드캐스트),브로드캐스트,"{ ""op"": ""string"", ""operationId"": ""string"", ""userId"": ""string"", ""userName"": ""string"", ""result"": object, ""appliedAt"": ""ISO 8601"" }",브로드캐스트,"{ ""type"": ""operation.applied"", ""data"": { ""op"": ""table.create"", ""operationId"": ""op_abc456"", ""userId"": ""usr_123"", ""userName"": ""user1"", ""result"": { ""tableKey"": 789, ""logicalName"": ""사용자"", ""physicalName"": ""users"", ""x"": 100, ""y"": 200 }, ""appliedAt"": ""2024-10-18T12:00:00Z"" } }",모든 접속자(자신 포함)에게 브로드캐스트. 클라이언트는 이 메시지로 UI 업데이트.,"// 작업 완료 처리
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'operation.applied') {
+    const { op, result, userId } = msg.data;
+    
+    // 자신의 작업인 경우
+    if (msg.requestId === myRequestId) {
+      console.log('내 작업 완료:', result);
+    }
+    
+    // UI 업데이트 (모든 사용자)
+    updateUI(op, result);
+  }
+};",v1.0
+Operation,erd,"erd_relations, erd_tables, projects, users, edit_history",relation.create,클라이언트→서버,관계 생성,"{ ""op"": ""relation.create"", ""payload"": { ""fromTableKey"": number, ""toTableKey"": number, ""relationType"": ""OPTIONAL_ONE_TO_ONE|STRICT_ONE_TO_ONE|OPTIONAL_ONE_TO_MANY|STRICT_ONE_TO_MANY|MANY_TO_MANY|SELF_RELATION"", ""constraintName"": ""string"", ""onDeleteAction"": ""CASCADE|SET NULL|SET DEFAULT|RESTRICT|NO ACTION"", ""onUpdateAction"": ""CASCADE|SET NULL|SET DEFAULT|RESTRICT|NO ACTION"" } }","{ ""op"": ""relation.create"", ""operationId"": ""string"", ""userId"": ""string"", ""result"": { ""relationKey"": number, ""fromTableKey"": number, ""toTableKey"": number, ""relationType"": ""string"", ""createdAt"": ""ISO 8601"" } }","{ ""type"": ""operation.send"", ""requestId"": ""req_129"", ""data"": { ""op"": ""relation.create"", ""payload"": { ""fromTableKey"": 789, ""toTableKey"": 012, ""relationType"": ""OPTIONAL_ONE_TO_MANY"", ""constraintName"": ""fk_users_posts"", ""onDeleteAction"": ""CASCADE"", ""onUpdateAction"": ""NO ACTION"" } } }","{ ""type"": ""operation.applied"", ""requestId"": ""req_129"", ""data"": { ""op"": ""relation.create"", ""operationId"": ""op_stu234"", ""userId"": ""usr_123"", ""result"": { ""relationKey"": 345, ""fromTableKey"": 789, ""toTableKey"": 012, ""relationType"": ""OPTIONAL_ONE_TO_MANY"", ""createdAt"": ""2024-10-18T12:06:00Z"" } } }",relationType 6가지 지원. constraintName 자동 생성 가능.,,v1.0
+Operation,erd,"erd_relations, erd_tables, projects, users, edit_history",relation.delete,클라이언트→서버,관계 삭제,"{ ""op"": ""relation.delete"", ""payload"": { ""relationKey"": number } }","{ ""op"": ""relation.delete"", ""operationId"": ""string"", ""userId"": ""string"", ""result"": { ""relationKey"": number, ""deletedAt"": ""ISO 8601"" } }","{ ""type"": ""operation.send"", ""requestId"": ""req_130"", ""data"": { ""op"": ""relation.delete"", ""payload"": { ""relationKey"": 345 } } }","{ ""type"": ""operation.applied"", ""requestId"": ""req_130"", ""data"": { ""op"": ""relation.delete"", ""operationId"": ""op_vwx567"", ""userId"": ""usr_123"", ""result"": { ""relationKey"": 345, ""deletedAt"": ""2024-10-18T12:07:00Z"" } } }",Soft delete,,v1.0
+Operation,erd,"erd_relations, erd_tables, projects, users, edit_history",relation.update,클라이언트→서버,관계 수정,"{ 
+  ""type"": ""relation.update"",
+  ""relationKey"": number,
+  ""data"": {
+    ""relationType"": ""ONE_TO_MANY"" | ""MANY_TO_ONE"" | ""ONE_TO_ONE"" | ""MANY_TO_MANY"",
+    ""constraintName"": ""string"",
+    ""onDeleteAction"": ""CASCADE"" | ""SET NULL"" | ""NO ACTION"" | ""RESTRICT"",
+    ""onUpdateAction"": ""CASCADE"" | ""SET NULL"" | ""NO ACTION"" | ""RESTRICT""
+  }
+}",,"ws.send(JSON.stringify({
+  type: ""relation.update"",
+  relationKey: 123,
+  data: {
+    relationType: ""ONE_TO_MANY"",
+    constraintName: ""fk_user_orders"",
+    onDeleteAction: ""CASCADE"",
+    onUpdateAction: ""NO ACTION""
+  }
+}));",,관계 타입 및 참조 무결성 제약 조건 수정. operation.applied로 브로드캐스트됨,,v1.2.0
+Operation,erd,"erd_tables, projects, users, edit_history",table.create,클라이언트→서버,테이블 생성,"{ ""op"": ""table.create"", ""payload"": { ""logicalName"": ""string"", ""physicalName"": ""string"", ""x"": number, ""y"": number, ""colorHex"": ""string (6자리)"" } }","{ ""op"": ""table.create"", ""operationId"": ""string"", ""userId"": ""string"", ""result"": { ""tableKey"": number, ""logicalName"": ""string"", ""physicalName"": ""string"", ""x"": number, ""y"": number, ""colorHex"": ""string"", ""createdAt"": ""ISO 8601"" } }","{ ""type"": ""operation.send"", ""requestId"": ""req_123"", ""data"": { ""op"": ""table.create"", ""payload"": { ""logicalName"": ""사용자"", ""physicalName"": ""users"", ""x"": 100, ""y"": 200, ""colorHex"": ""3B82F6"" } } }","{ ""type"": ""operation.applied"", ""requestId"": ""req_123"", ""data"": { ""op"": ""table.create"", ""operationId"": ""op_abc456"", ""userId"": ""usr_123"", ""result"": { ""tableKey"": 789, ""logicalName"": ""사용자"", ""physicalName"": ""users"", ""x"": 100, ""y"": 200, ""colorHex"": ""3B82F6"", ""createdAt"": ""2024-10-18T12:00:00Z"" } } }",requestId는 요청 추적용 (선택). 모든 접속자에게 브로드캐스트됨.,"// 테이블 생성
+function createTable(logicalName, physicalName, x, y) {
+  ws.send(JSON.stringify({
+    type: 'operation.send',
+    requestId: generateRequestId(),
+    data: {
+      op: 'table.create',
+      payload: {
+        logicalName,
+        physicalName,
+        x,
+        y,
+        colorHex: '3B82F6'
+      }
+    }
+  }));
+}",v1.0
+Operation,erd,"erd_tables, projects, users, edit_history",table.delete,클라이언트→서버,테이블 삭제,"{ ""op"": ""table.delete"", ""payload"": { ""tableKey"": number } }","{ ""op"": ""table.delete"", ""operationId"": ""string"", ""userId"": ""string"", ""result"": { ""tableKey"": number, ""deletedAt"": ""ISO 8601"" } }","{ ""type"": ""operation.send"", ""requestId"": ""req_125"", ""data"": { ""op"": ""table.delete"", ""payload"": { ""tableKey"": 789 } } }","{ ""type"": ""operation.applied"", ""requestId"": ""req_125"", ""data"": { ""op"": ""table.delete"", ""operationId"": ""op_ghi012"", ""userId"": ""usr_123"", ""result"": { ""tableKey"": 789, ""deletedAt"": ""2024-10-18T12:02:00Z"" } } }",Soft delete (deleted_at 설정). 관련 컬럼/관계도 함께 삭제됨.,,v1.0
+Operation,erd,"erd_tables, projects, users, edit_history",table.update,클라이언트→서버,테이블 수정,"{ ""op"": ""table.update"", ""payload"": { ""tableKey"": number, ""changes"": { ""logicalName"": ""string"", ""physicalName"": ""string"", ""x"": number, ""y"": number, ""colorHex"": ""string"" } } }","{ ""op"": ""table.update"", ""operationId"": ""string"", ""userId"": ""string"", ""result"": { ""tableKey"": number, ""changes"": object, ""updatedAt"": ""ISO 8601"" } }","{ ""type"": ""operation.send"", ""requestId"": ""req_124"", ""data"": { ""op"": ""table.update"", ""payload"": { ""tableKey"": 789, ""changes"": { ""logicalName"": ""회원"", ""x"": 150, ""y"": 250 } } } }","{ ""type"": ""operation.applied"", ""requestId"": ""req_124"", ""data"": { ""op"": ""table.update"", ""operationId"": ""op_def789"", ""userId"": ""usr_123"", ""result"": { ""tableKey"": 789, ""changes"": { ""logicalName"": ""회원"", ""x"": 150, ""y"": 250 }, ""updatedAt"": ""2024-10-18T12:01:00Z"" } } }",변경할 필드만 changes에 포함,,v1.0
+Cursor,user,"users, project_member_relations",cursor.broadcast,서버→클라이언트,다른 사용자 커서 (브로드캐스트),브로드캐스트,"{ ""userKey"": number, ""nickname"": ""string"", ""x"": number, ""y"": number, ""targetTable"": ""string|null"", ""color"": ""string (hex)"" }",브로드캐스트,"{ ""type"": ""cursor.broadcast"", ""data"": { ""userKey"": 123, ""nickname"": ""user1"", ""x"": 350, ""y"": 450, ""targetTable"": ""tbl_789"", ""color"": ""#3B82F6"" } }",다른 사용자 커서 표시용. color는 사용자별 고유 색상.,,v1.0
+Cursor,user,"users, project_member_relations",cursor.move,클라이언트→서버,커서 위치 이동,"{ ""x"": number, ""y"": number, ""targetTable"": ""string|null"", ""action"": ""hover|click|drag"" }",브로드캐스트 (cursor.broadcast),"{ ""type"": ""cursor.move"", ""data"": { ""x"": 350, ""y"": 450, ""targetTable"": ""tbl_789"", ""action"": ""hover"" } }",브로드캐스트됨 (cursor.broadcast 참고),초당 최대 30회 전송 가능. targetTable: 마우스가 위치한 테이블 ID (선택).,"// 커서 이동 전송 (쓰로틀링)
+let lastCursorSent = 0;
+canvas.onmousemove = (e) => {
+  const now = Date.now();
+  if (now - lastCursorSent < 33) return; // 30fps
+  
+  ws.send(JSON.stringify({
+    type: 'cursor.move',
+    data: {
+      x: e.clientX,
+      y: e.clientY,
+      targetTable: getTableUnderCursor(e)
+    }
+  }));
+  lastCursorSent = now;
+};",v1.0
+Selection,user,"users, project_member_relations, erd_tables",selection.broadcast,서버→클라이언트,다른 사용자 선택 (브로드캐스트),브로드캐스트,"{ ""userKey"": number, ""nickname"": ""string"", ""selectedTables"": [""string""], ""selectedColumns"": [""string""], ""selectedRelations"": [""string""], ""color"": ""string (hex)"" }",브로드캐스트,"{ ""type"": ""selection.broadcast"", ""data"": { ""userKey"": 123, ""nickname"": ""user1"", ""selectedTables"": [""tbl_789""], ""color"": ""#3B82F6"" } }",다른 사용자가 선택한 요소 표시용,,v1.0
+Selection,user,"users, project_member_relations, erd_tables",selection.change,클라이언트→서버,선택 영역 변경,"{ ""selectedTables"": [""string""], ""selectedColumns"": [""string""], ""selectedRelations"": [""string""] }",브로드캐스트 (selection.broadcast),"{ ""type"": ""selection.change"", ""data"": { ""selectedTables"": [""tbl_789"", ""tbl_012""], ""selectedColumns"": [""col_456"", ""col_789""], ""selectedRelations"": [""rel_345""] } }",브로드캐스트됨 (selection.broadcast 참고),다중 선택 가능,,v1.0
+Presence,user,"users, project_member_relations, projects",presence.update,서버→클라이언트,참가자 상태 업데이트,자동 전송,"{ ""onlineUsers"": [{ ""userKey"": number, ""nickname"": ""string"", ""profileImage"": ""string (URL)"", ""status"": ""EDITING|IDLE"", ""cursor"": { ""x"": number, ""y"": number }|null, ""lastActivity"": ""ISO 8601"" }], ""totalCount"": number }",자동 전송,"{ ""type"": ""presence.update"", ""data"": { ""onlineUsers"": [{ ""userKey"": 123, ""nickname"": ""user1"", ""profileImage"": ""https://..."", ""status"": ""EDITING"", ""cursor"": { ""x"": 100, ""y"": 200 }, ""lastActivity"": ""2024-10-18T12:00:00Z"" }, { ""userKey"": 456, ""nickname"": ""user2"", ""status"": ""IDLE"", ""cursor"": null, ""lastActivity"": ""2024-10-18T11:58:00Z"" }], ""totalCount"": 2 } }","참가자 입장/퇴장/상태 변경 시 자동 브로드캐스트. status: EDITING(편집중), IDLE(접속중/비활성)",,v1.0
+User,user,"users, project_member_relations, projects",user.joined,서버→클라이언트,사용자 입장,자동 전송,"{ ""userKey"": number, ""nickname"": ""string"", ""profileImage"": ""string (URL)"", ""role"": ""OWNER|EDITOR"", ""joinedAt"": ""ISO 8601"" }",자동 전송,"{ ""type"": ""user.joined"", ""data"": { ""userKey"": 789, ""nickname"": ""user3"", ""profileImage"": ""https://..."", ""role"": ""EDITOR"", ""joinedAt"": ""2024-10-18T12:05:00Z"" } }",새 사용자 입장 시 모든 접속자에게 브로드캐스트,,v1.0
+User,user,"users, project_member_relations, projects",user.left,서버→클라이언트,사용자 퇴장,자동 전송,"{ ""userKey"": number, ""nickname"": ""string"", ""leftAt"": ""ISO 8601"", ""reason"": ""disconnected|timeout|kicked"" }",자동 전송,"{ ""type"": ""user.left"", ""data"": { ""userKey"": 789, ""nickname"": ""user3"", ""leftAt"": ""2024-10-18T12:10:00Z"", ""reason"": ""disconnected"" } }","사용자 퇴장 시 브로드캐스트. reason: disconnected(연결끊김), timeout(타임아웃), kicked(강제퇴장)",,v1.0
+Error,version,"projects, users",error,서버→클라이언트,에러 메시지,에러 발생 시,"{ ""code"": ""UNAUTHORIZED|FORBIDDEN|VALIDATION_ERROR|OPERATION_FAILED|CONFLICT|RATE_LIMIT_EXCEEDED|MESSAGE_TOO_LARGE|INTERNAL_ERROR"", ""message"": ""string"", ""details"": { ""reason"": ""string"", ""field"": ""string"", ""value"": any } }",에러 발생 시,"{ ""type"": ""error"", ""requestId"": ""req_123"", ""data"": { ""code"": ""OPERATION_FAILED"", ""message"": ""테이블 생성에 실패했습니다."", ""details"": { ""reason"": ""중복된 물리명입니다."", ""field"": ""physicalName"", ""value"": ""users"" } } }",에러 코드 8가지. requestId가 있으면 해당 요청의 에러임.,"// 에러 처리
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'error') {
+    const { code, message, details } = msg.data;
+    
+    if (code === 'RATE_LIMIT_EXCEEDED') {
+      showNotification('작업이 너무 빠릅니다. 잠시 후 다시 시도하세요.');
+    } else if (code === 'VALIDATION_ERROR') {
+      showFieldError(details.field, message);
+    }
+  }
+};",v1.0

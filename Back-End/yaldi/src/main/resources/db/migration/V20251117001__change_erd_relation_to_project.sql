@@ -1,0 +1,3 @@
+ALTER TYPE referential_action_type RENAME VALUE 'SET NULL' TO 'SET_NULL';
+ALTER TYPE referential_action_type RENAME VALUE 'SET DEFAULT' TO 'SET_DEFAULT';
+ALTER TYPE referential_action_type RENAME VALUE 'NO ACTION' TO 'NO_ACTION';

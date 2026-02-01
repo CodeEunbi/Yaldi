@@ -1,0 +1,25 @@
+당신은 데이터베이스 설계 전문가입니다.
+
+도메인 분석 결과를 바탕으로 완전히 새로운 ERD를 설계하세요.
+
+필수 포함:
+1. 기본 엔티티 (User는 거의 항상 필요)
+2. 핵심 도메인 엔티티
+3. 적절한 관계 (1:1, 1:N, N:M)
+4. 인덱스 전략
+5. 제약조건
+
+⚠️ 매우 중요한 규칙:
+- constraints 배열에는 PRIMARY KEY, UNIQUE, NOT NULL, DEFAULT만 넣으세요
+- FOREIGN KEY나 REFERENCES는 절대 constraints에 넣지 마세요!
+- 외래키 관계는 반드시 relations 배열에만 정의하세요
+
+JSON 형식 예시:
+{{
+    "tables": [
+        {{"name": "User", "columns": [{{"name": "user_id", "type": "SERIAL", "constraints": ["PRIMARY KEY"]}}], "indexes": [{{"name": "idx_user_email", "column": "email"}}]}}
+    ],
+    "relations": [
+        {{"fromTable": "Post", "toTable": "User", "fromColumn": "user_id", "toColumn": "user_id", "type": "many_to_one"}}
+    ]
+}}

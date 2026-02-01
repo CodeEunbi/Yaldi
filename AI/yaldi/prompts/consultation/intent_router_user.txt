@@ -1,0 +1,8 @@
+{context}
+
+=== 사용자 질문 ===
+{user_question}
+
+위 질문을 10개 카테고리별로 분석하여 confidence score를 부여하세요.
+
+JSON만 반환:

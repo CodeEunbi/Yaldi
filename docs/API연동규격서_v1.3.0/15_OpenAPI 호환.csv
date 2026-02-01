@@ -1,0 +1,18 @@
+카테고리,설명,비고,버전
+OpenAPI 3.0 스펙,"RESTful API를 기술하기 위한 표준 명세
+openapi: 3.0.3
+info: API 정보 (제목, 버전, 설명)
+servers: API 서버 URL (4개 환경)
+paths: API 엔드포인트 정의 (60+ APIs)
+components: 재사용 가능한 스키마
+security: 인증 방식 (Cookie-based JWT)
+tags: API 그룹화 (카테고리)",,
+API 서버 URL,"Production: https://api.yaldi.io
+Staging: https://api-staging.yaldi.io
+Development: https://api-dev.yaldi.io
+Local: http://localhost:8080",,
+Deprecated API 처리,"deprecated: true로 표시
+응답 헤더: Sunset, Link
+3단계 프로세스: 발표 (6개월 전) → Deprecated → Sunset",,
+Content Negotiation,"Accept: application/json (기본)
+Accept: text/csv (Export용 별도 엔드포인트)",,

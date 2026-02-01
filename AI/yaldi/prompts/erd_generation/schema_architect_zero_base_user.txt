@@ -1,0 +1,9 @@
+=== 도메인 분석 ===
+{domain_analysis}
+
+=== 요구사항 ===
+{requirements}
+
+위 분석을 바탕으로 ERD를 처음부터 설계하세요.
+반드시 FOREIGN KEY는 constraints가 아닌 relations 배열에만 정의하세요.
+JSON만 반환하세요.

@@ -1,0 +1,14 @@
+카테고리,설명,비고,버전
+목적,"Yaldi ERD 도구의 백엔드 API 연동 규격서.
+프론트엔드와 백엔드 개발자 간 명확한 커뮤니케이션을 위한 표준 문서",,
+배경,실시간 협업 ERD 작성 도구로 사용자 인증 ERD CRUD 버전 관리 DTO 관리 프로젝트 탐색 태블릿 스케치 기능을 제공,,
+비즈니스 필요성,데이터베이스 설계의 효율성 향상 팀 협업 강화 AI 기반 최적화 제안을 통한 설계 품질 향상,,
+작성자,최경민,,
+기술 스택,"Backend: Spring Boot 3.x (Java 17+) - Port 8080
+Frontend: React 18.x (가정) - Port 3000
+Database: PostgreSQL / MySQL
+Cache: Redis
+Storage: AWS S3
+Realtime: WebSocket (Owner/Editor), SSE (Viewer)","로컬 개발 환경 기준
+OAuth Callback URI는 프론트엔드 포트(3000) 사용",v1.1.0
+OpenAPI Spec,v1.1.0,,

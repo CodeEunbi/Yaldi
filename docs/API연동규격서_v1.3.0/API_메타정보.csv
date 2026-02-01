@@ -1,0 +1,130 @@
+섹션,카테고리,제목,내용,비고,버전
+개요,목적,,"Yaldi ERD 도구의 백엔드 API 연동 규격서 v1.3.0
+프론트엔드와 백엔드 개발자 간 명확한 커뮤니케이션을 위한 표준 문서
+실시간 협업 기능 (WebSocket Direct Broadcast) 및 성능 최적화 반영",,v1.3.0
+개요,배경,,"실시간 협업 ERD 작성 도구
+- 사용자 인증 (JWT + OAuth 2.0)
+- ERD CRUD (테이블/컬럼/관계)
+- 실시간 협업 (WebSocket Direct Broadcast)
+- 버전 관리 (스냅샷)
+- Lock 관리 (Redisson 분산 락)
+- AI 기능 (디자인 검증, Mock 데이터 생성)
+- DTO 관리
+- 프로젝트 탐색",,v1.3.0
+개요,주요 변경사항 (v1.3.0),,Direct WebSocket Broadcast 추가 (TABLE_MOVE CURSOR_MOVE) - Kafka 없이 즉시 전송
+Batch Event Compression - 2초마다 중복 이벤트 압축
+Redisson 분산 락 + Heartbeat
+API 경로 단순화 (/api/v1/erd/tables)
+SecurityUtil 사용 (DB 조회 없이 JWT에서 userKey 추출)
+개별 GET 엔드포인트 삭제 (전체 ERD 조회로 통합),v1.2.0 대비,v1.3.0
+개요,작성자,,Backend Development Team,,v1.3.0
+개요,기술 스택,,"Backend: Spring Boot 3.x (Java 21) - Port 8080
+Frontend: React 19 - Port 5173
+Database: PostgreSQL - Port 5432
+Cache: Redis (Redisson) - Port 6379
+Storage: AWS S3
+Messaging: Kafka - Port 9092
+Kafka UI: Port 8989
+Monitoring: Prometheus - Port 9090, Grafana - Port 3000
+Realtime: WebSocket (STOMP) + Direct Broadcast",로컬 개발 환경 기준,v1.3.0
+개요,OpenAPI Spec,,v1.3.0,,v1.3.0
+시작하기,사전작업,,PostgreSQL Redis(Lock 및 Refresh Token 저장소) S3(파일 저장소) Kafka(메시지 큐) 준비 필요,,v1.3.0
+시작하기,인증방식,,"JWT + HttpOnly 쿠키 기반 인증
+Access Token: 15분, Refresh Token: 7일
+쿠키(accessToken)가 자동으로 전송됨. 별도 헤더 설정 불필요
+OAuth 2.0 & OIDC 소셜 로그인 지원(Google, GitHub)
+SameSite=Strict로 CSRF 자동 보호",,v1.3.0
+시작하기,사용순서,,"1. 회원가입/로그인
+2. JWT 토큰 자동 발급 (HttpOnly 쿠키)
+3. API 요청 시 쿠키 자동 전송
+4. WebSocket 연결 (JWT 포함)
+5. 실시간 이벤트 구독
+6. 응답 처리
+7. 에러 핸들링",,v1.3.0
+보안 및 통신,HTTPS/TLS,,"TLS 1.2 이상 필수, TLS 1.3 권장
+지원 암호화: TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384
+HTTP → HTTPS 자동 리다이렉트 (301)
+HSTS 적용: max-age=31536000, includeSubDomains",,v1.3.0
+보안 및 통신,WebSocket,,"프로토콜: wss:// (Secure WebSocket)
+엔드포인트: ws://localhost:8080/ws
+인증: JWT (쿠키 또는 헤더)
+Heartbeat: 30초마다 Ping/Pong
+자동 재연결: 지수 백오프 (1s → 2s → 4s → 8s → 최대 30s)
+최대 재연결 시도: 5회
+최대 메시지 크기: 1MB",,v1.3.0
+보안 및 통신,Direct Broadcast,,"휘발성 이벤트(TABLE_MOVE, CURSOR_MOVE)는 Kafka 거치지 않음
+WebSocket으로 즉시 브로드캐스트 (초저지연)
+지연 시간: 평균 60ms (Kafka 250ms 대비 76% 감소)",,v1.3.0
+보안 및 통신,Kafka,,"중요 이벤트만 Kafka 사용 (TABLE_NEW, COLUMN_REORDER, TABLE_LOCK 등)
+Batch Compression: 2초마다 중복 이벤트 압축
+압축률: 50-99% 메시지 수 감소",,,v1.3.0
+보안 및 인증,JWT 구조,,"Header: 알고리즘(RS256) 및 토큰 타입
+Payload: Claims (iss, sub, exp, iat, userKey, roles)
+Signature: Header+Payload를 비밀키로 서명
+쿠키로 전달되어 XSS 공격 방어",,v1.3.0
+보안 및 인증,JWT 쿠키 설정,,"쿠키명: accessToken, refreshToken
+HttpOnly: true (JavaScript 접근 불가)
+Secure: true (HTTPS 전용)
+SameSite: Strict (CSRF 방지)
+Domain: .yaldi.kr
+Path: / (accessToken), /api/v1/auth/refresh (refreshToken)",,v1.3.0
+보안 및 인증,RBAC 권한 모델,,"OWNER: 모든 권한 (삭제, 멤버 관리)
+EDITOR: 읽기/쓰기 (ERD 편집, 버전 생성)
+VIEWER: 읽기 전용",,v1.3.0
+보안 및 인증,Redisson 분산 락,,"분산 환경에서 안전한 Lock 관리
+TTL: 30초 (자동 해제)
+Heartbeat: 10초마다 갱신
+연결 해제 시 자동 락 해제",,v1.3.0
+보안 코딩,CORS 정책,,"허용 Origin: https://yaldi.kr, http://localhost:5173
+허용 Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+허용 Headers: Authorization, Content-Type, X-Requested-With
+Credentials: true
+Preflight 캐시: 86400초",,v1.3.0
+보안 코딩,Rate Limiting,,"인증된 사용자: 1000 req/hour
+미인증 사용자: 100 req/hour
+로그인 시도: 5 req/15min
+파일 업로드: 10 req/hour
+구현: Redis 기반 Sliding Window",,v1.3.0
+API 설계,응답 형식,,"모든 API는 ApiResponse 래퍼 사용
+{ ""isSuccess"": true, ""code"": ""COMMON200"", ""message"": ""성공입니다."", ""result"": {...} }
+에러 시: isSuccess=false, 에러 코드 및 메시지 포함",,v1.3.0
+API 설계,페이지네이션,,"Spring Pageable 사용
+page: 페이지 번호 (0부터 시작, 기본값: 0)
+size: 페이지 크기 (기본값: 20, 최대: 100)
+sort: 정렬 기준 (예: createdAt,desc)",,v1.3.0
+API 설계,에러 코드 체계,,"HTTP 상태 코드 + 서비스별 에러 코드
+USER4xxx: 사용자 관련
+TEAM4xxx: 팀 관련
+PROJECT4xxx: 프로젝트 관련
+ERD_TABLE4xxx: ERD 테이블 관련
+ERD_COLUMN4xxx: ERD 컬럼 관련
+WS5xxx: WebSocket 관련
+LOCK5xxx: Lock 관련",,v1.3.0
+공통 에러 코드,400 Bad Request,,요청 파라미터 오류 또는 필수 값 누락,,v1.3.0
+공통 에러 코드,401 Unauthorized,,인증 토큰 없음 또는 유효하지 않음,,v1.3.0
+공통 에러 코드,403 Forbidden,,권한 없음,,v1.3.0
+공통 에러 코드,404 Not Found,,리소스 존재하지 않음,,v1.3.0
+공통 에러 코드,409 Conflict,,중복된 리소스 또는 데이터 충돌,,v1.3.0
+공통 에러 코드,413 Payload Too Large,,파일 크기 초과,,v1.3.0
+공통 에러 코드,429 Too Many Requests,,Rate Limit 초과,,v1.3.0
+공통 에러 코드,500 Internal Server Error,,서버 내부 오류,,v1.3.0
+공통 에러 코드,200 OK,,요청 성공,,v1.3.0
+공통 에러 코드,201 Created,,리소스 생성 성공,,v1.3.0
+공통 에러 코드,204 No Content,,"요청 성공, 응답 본문 없음",,v1.3.0
+용어 설명,ERD,,"Entity Relationship Diagram - 개체 관계 다이어그램",,v1.3.0
+용어 설명,DTO,,"Data Transfer Object - 데이터 전송 객체",,v1.3.0
+용어 설명,JWT,,"JSON Web Token - 토큰 기반 인증",,v1.3.0
+용어 설명,STOMP,,"Simple Text Oriented Messaging Protocol - WebSocket 메시징 프로토콜",,v1.3.0
+용어 설명,Redisson,,"Redis 기반 분산 락 라이브러리",,v1.3.0
+용어 설명,Direct Broadcast,,"Kafka 없이 WebSocket으로 즉시 전송하는 방식",,v1.3.0
+용어 설명,Batch Compression,,"중복 이벤트를 압축하여 메시지 수 감소",,v1.3.0
+버전 관리,변경 이력,,"v1.3.0: Direct WebSocket Broadcast, Batch Compression, API 경로 단순화
+v1.2.0: WebSocket 실시간 협업 추가
+v1.1.0: API 설계 표준 추가
+v1.0.0: 초기 릴리스",,v1.3.0
+버전 관리,버전 정보,,"Current Version: v1.3.0
+Release Date: 2025-01-14
+API Version: v1",,v1.3.0
+참고 문서,Yaldi 문서,,"ERD Realtime Collaboration: docs/ERD_REALTIME_COLLABORATION.md
+Status Page: https://status.yaldi.kr
+GitHub: https://github.com/yaldi-io",,v1.3.0

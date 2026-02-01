@@ -1,0 +1,44 @@
+{context}
+
+=== 현재 스키마 ===
+{schema_summary}
+
+=== 사용자 질문 ===
+{user_question}
+
+당신의 전문 분야로 위 질문에 답변해주세요.
+
+JSON 형식으로 반환:
+{{
+    "answer": "상세한 답변...",
+    "confidence": 0.9,
+    "options": [
+        {{
+            "title": "옵션 A: AUTO_INCREMENT 사용",
+            "pros": ["간단함", "성능 좋음"],
+            "cons": ["분산 환경 어려움"],
+            "recommendation": "단일 DB 환경에 추천"
+        }}
+    ],
+    "schema_modifications": [
+        {{
+            "action": "ADD_INDEX",
+            "description": "이메일 검색 성능 향상을 위한 인덱스 추가",
+            "details": {{
+                "table": "User",
+                "column": "email",
+                "type": "BTREE"
+            }},
+            "impact": {{
+                "pros": ["조회 성능 80% 향상"],
+                "cons": ["INSERT 성능 3% 감소", "저장 공간 2MB 증가"]
+            }}
+        }}
+    ],
+    "warnings": ["기존 쿼리 수정 필요"],
+    "references": ["https://..."]
+}}
+
+**중요**:
+- confidence < 0.7이면 options에 여러 대안 제시 (2-3개)
+- confidence >= 0.8이면 단일 권장사항, options 비워도 됨

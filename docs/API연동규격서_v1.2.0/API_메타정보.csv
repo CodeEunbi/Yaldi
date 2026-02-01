@@ -1,0 +1,519 @@
+섹션,카테고리,제목,내용,비고,버전
+개요,목적,,"Yaldi ERD 도구의 백엔드 API 연동 규격서.
+프론트엔드와 백엔드 개발자 간 명확한 커뮤니케이션을 위한 표준 문서",,v1.2.0
+개요,배경,,실시간 협업 ERD 작성 도구로 사용자 인증 ERD CRUD 버전 관리 DTO 관리 프로젝트 탐색 태블릿 스케치 기능을 제공,,v1.2.0
+개요,비즈니스 필요성,,데이터베이스 설계의 효율성 향상 팀 협업 강화 AI 기반 최적화 제안을 통한 설계 품질 향상,,v1.2.0
+개요,작성자,,최경민,,v1.2.0
+개요,기술 스택,,"Backend: Spring Boot 3.x (Java 21) - Port 8080
+Frontend: React 19 - Port 5173
+Database: PostgreSQL - Port 5432
+Cache: Redis - Port 6379
+Storage: AWS S3
+Messaging: Kafka - Port 9092
+Kafka UI: Port 8989
+Monitoring: Prometheus - Port 9090, Grafana - Port 3000
+Realtime: WebSocket (Owner/Editor), SSE (Viewer)",로컬 개발 환경 기준. OAuth Callback URI는 프론트엔드 포트(5173) 사용,v1.2.0
+개요,OpenAPI Spec,,v1.1.0,,v1.2.0
+시작하기,사전작업,,Node.js 환경 데이터베이스(PostgreSQL) Redis(Refresh Token 저장소 및 실시간 협업) S3(파일 저장소) 준비 필요,,v1.2.0
+시작하기,인증방식,,"JWT + HttpOnly 쿠키 기반 인증.
+Access Token: 15분, Refresh Token: 7일.
+쿠키(access_token)가 자동으로 전송됨. 별도 헤더 설정 불필요.
+OAuth 2.0 & OIDC 소셜 로그인 지원(Google, GitHub).
+SameSite=Strict로 CSRF 자동 보호",,v1.2.0
+시작하기,사용순서,,"1.
+회원가입/로그인 → 2.
+JWT 토큰 자동 발급 (HttpOnly 쿠키) → 3.
+API 요청 시 쿠키 자동 전송 → 4.
+응답 처리 → 5.
+에러 핸들링",,v1.2.0
+시작하기,실시간 협업 구조,,v1.1.0,,v1.2.0
+시작하기,소셜 로그인 설정,,v1.1.0,,v1.2.0
+보안 및 통신,HTTPS/TLS,,"TLS 1.2 이상 필수.
+TLS 1.3 권장.
+지원 암호화 스위트: TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256",,v1.2.0
+보안 및 통신,HTTPS/TLS,,"HTTP 요청은 자동으로 HTTPS로 리다이렉트 (301 Moved Permanently).
+HSTS (HTTP Strict Transport Security) 적용: max-age=31536000, includeSubDomains, preload",,v1.2.0
+보안 및 통신,TCP 통신,,"프로토콜: HTTP/1.1, HTTP/2.
+Connection Timeout: 30초.
+Read Timeout: 60초.
+Keep-Alive: 활성화",,v1.2.0
+보안 및 통신,TCP 통신,,"최대 연결 수: 100.
+Keep-Alive Timeout: 60초.
+Idle Timeout: 5분 (300초)",,v1.2.0
+보안 및 통신,WebSocket,,"프로토콜: wss:// (Secure WebSocket).
+인증: 쿠키(yaldi_session_id) 자동 전송 (브라우저) 또는 헤더 전달.
+세션 검증: 연결 시 세션 ID 검증 및 권한 확인.
+Heartbeat: 30초마다 Ping/Pong",,v1.2.0
+보안 및 통신,WebSocket,,"지수 백오프: 1s → 2s → 4s → 8s → 최대 30s.
+최대 재연결 시도: 5회.
+자동 재연결 활성화",,v1.2.0
+보안 및 통신,WebSocket,,"최대 메시지 크기: 1MB.
+초과 시 413 Payload Too Large 에러 반환",,v1.2.0
+보안 및 통신,SSE,,"프로토콜: HTTPS.
+용도: Viewer의 단방향 실시간 수신.
+재연결: 자동 (5초 후).
+Heartbeat: 60초마다 빈 메시지",,v1.2.0
+보안 및 통신,SSE,,"Event Types: table-created, table-updated, table-deleted, presence-updated, heartbeat",,v1.2.0
+보안 및 통신,Connection Pool,,"REST API Connection Pool: 최대 100개.
+WebSocket 동시 연결: 프로젝트당 24명.
+Keep-Alive Timeout: 60초.
+Idle Connection Timeout: 300초",,v1.2.0
+보안 및 통신,에러 핸들링,,"네트워크 에러 시 최대 3회 재시도 (지수 백오프: 1s → 2s → 4s).
+5xx 에러: 재시도.
+4xx 에러: 재시도 안 함",,v1.2.0
+보안 및 통신,에러 핸들링,,"조건: 5회 연속 실패.
+차단 시간: 30초.
+복구: Half-Open 상태로 1회 테스트 후 복구",,v1.2.0
+보안 및 통신,에러 핸들링,,"Connection Refused: 503 Service Unavailable.
+Timeout 에러: 408 Request Timeout.
+네트워크 연결 확인 메시지 포함",,v1.2.0
+보안 및 통신,UDP,,"Yaldi는 UDP를 사용하지 않습니다.
+모든 통신은 TCP 기반 (HTTP/HTTPS, WebSocket, SSE)입니다.
+UDP는 신뢰성이 보장되지 않아 ERD 편집 및 버전 관리에 적합하지 않음",,v1.2.0
+보안 및 통신,성능 최적화,,"Gzip: 활성화 (텍스트 응답).
+Brotli: 지원 (최신 브라우저).
+압축률: 평균 70% 감소.
+Accept-Encoding: gzip, deflate, br",,v1.2.0
+보안 및 통신,성능 최적화,,"CSS, JavaScript 리소스 자동 푸시.
+초기 로딩 속도 30% 향상",,v1.2.0
+보안 및 인증,인증 방식,,"JWT (JSON Web Token) + 쿠키 전달
+Access Token: 15분 (짧게)
+Refresh Token: 7일 (길게)
+알고리즘: RS256 (비대칭키)
+전달 방식: HttpOnly 쿠키 (XSS 방어)
+OAuth 2.0 & OIDC 지원",,v1.2.0
+보안 및 인증,JWT 쿠키 설정,,"쿠키명: access_token, refresh_token
+HttpOnly: true (JavaScript 접근 불가)
+Secure: true (HTTPS 전용)
+SameSite: Strict (CSRF 방지)
+Domain: .yaldi.kr
+Path: / (access_token), /api/v1/auth/refresh (refresh_token)",,v1.2.0
+보안 및 인증,JWT 검증 절차,,"1. 쿠키에서 JWT 추출
+2. Signature 검증 (서버 비밀키로)
+3. Payload 확인 (exp, iss, aud 등)
+4. Refresh Token은 Redis Blacklist 확인
+5. DB 조회 없이 인증 완료 (병목 완화)",,v1.2.0
+보안 및 인증,RBAC 권한 모델,,"Owner: 모든 권한 (삭제, 멤버 관리)
+Editor: 읽기/쓰기 (ERD 편집, 버전 생성)
+Viewer: 읽기 전용",,v1.2.0
+보안 및 인증,Permission 체계,,"project:read/write/delete/manage_members
+table:read/write/delete
+column:read/write/delete
+relation:read/write/delete
+version:read/write",,v1.2.0
+보안 및 인증,Audit Log,,"모든 API 호출 및 데이터 변경 기록
+필드: action, resourceType, resourceId, userId, ip, userAgent, timestamp, details
+보존: 프로젝트 Audit Log 90일, 사용자 활동 로그 30일",,v1.2.0
+보안 및 인증,JWT 구조,,"Header: 알고리즘(RS256) 및 토큰 타입
+Payload: Claims (iss, sub, exp, iat, nbf, userId, roles)
+Signature: Header+Payload를 비밀키로 서명
+쿠키로 전달되어 XSS 공격 방어",,v1.2.0
+보안 및 인증,JWT 장점,,"병목 완화: DB 조회 없이 인증 (connection 절감)
+확장성: 서버 간 인증 정보 공유 가능
+무상태: 서버에 세션 저장 불필요
+동시접속 1천만 시: 약 2천만 connection 절감 효과",,v1.2.0
+보안 및 인증,Token 갱신 전략,,"웹: 만료 전 갱신 (pre-refresh, 만료 5분 전)
+Access Token: 서버에 저장 안 함
+Refresh Token: Redis에 저장 (블랙리스트 관리)",,v1.2.0
+보안 및 인증,OAuth 2.0 & OIDC,,"OAuth 2.0: 인가(Authorization) - API 접근 권한 부여
+OIDC (OpenID Connect): 인증(Authentication) - 사용자 신원 확인
+ID Token: 사용자 정보가 담긴 JWT (이메일, 이름, 프로필 사진 등)
+ 보안 강화
+로그인 성공 시 JWT를 HttpOnly 쿠키로 발급",,v1.2.0
+보안 및 인증,OAuth 2.0 & OIDC,Spring Security OAuth2 엔드포인트,"표준 엔드포인트:
+/oauth2/authorization/google - Google 로그인
+/oauth2/authorization/github - GitHub 로그인
+/oauth2/authorization/ssafy - SSAFY 로그인
+
+자동 처리 사항:
+- OAuth 제공자로 리다이렉트
+- Authorization Code 교환
+- 사용자 정보 조회
+- JWT 토큰 발급","GET 메소드, 브라우저에서 직접 접근",v1.2.0
+보안 및 인증,OIDC 흐름,,"1. 사용자 구글 로그인 동의
+2. Authorization Code 받음
+3. 백엔드가 Code를 Access Token + ID Token으로 교환
+4. ID Token에서 사용자 정보 추출 (email, name, picture 등)
+5. Yaldi JWT 생성 (Access + Refresh Token)
+6. JWT를 HttpOnly 쿠키로 발급
+7. ID Token은 서버에서만 검증 후 폐기",,v1.2.0
+보안 및 인증,Token 검증 API,,"엔드포인트: GET /api/v1/auth/verify
+쿠키에서 JWT 자동 읽기 및 검증
+응답: valid, userId, username, roles, expiresAt
+Token 무효/만료 시 401 Unauthorized",,v1.2.0
+보안 및 인증,소셜 로그인 지원,,"Google: OAuth 2.0 + OIDC (ID Token 포함)
+GitHub: OAuth 2.0 (UserInfo API로 프로필 조회)",,v1.2.0
+보안 및 인증,MFA (Multi-Factor Authentication),,"TOTP (Time-based OTP)
+SMS 인증
+이메일 인증",,v1.2.0
+보안 및 인증,Token 관리,,"Access Token: 15분 유효, 서버 저장 안 함
+Refresh Token: 7일 유효, Redis에 저장 (블랙리스트용)
+Token Rotation: Refresh 시 새로운 Refresh Token 발급
+디바이스별 Refresh Token 관리
+동시 로그인 제한: 최대 5개 디바이스",,v1.2.0
+보안 및 인증,비밀번호 재설정,,"이메일 링크 방식
+토큰 유효 기간: 1시간
+Rate Limiting: 5 req/hour",,v1.2.0
+보안 및 인증,계정 잠금 정책,,"로그인 실패 5회: 15분 잠금
+로그인 실패 10회: 1시간 잠금
+로그인 실패 20회: 관리자 확인 필요",,v1.2.0
+보안 및 인증,API Key 관리,,"API Key 생성/폐기
+Scope 기반 권한
+만료 기간 설정
+Rate Limiting: API Key별",,v1.2.0
+보안 및 인증,CSRF 보호,,"SameSite=Strict 쿠키로 CSRF 공격 방어
+JWT는 HttpOnly 쿠키로만 전달 (JavaScript 접근 불가)
+추가 CSRF 토큰 불필요 (SameSite로 충분)
+GET 요청은 부작용 없도록 설계",,v1.2.0
+보안 및 인증,Token 무효화,,"로그아웃: POST /api/v1/auth/logout (Refresh Token 블랙리스트 추가)
+전체 로그아웃: 모든 디바이스 Refresh Token 무효화
+Access Token: 만료 시까지 유효 (최대 15분)
+Blacklist: Redis에 Refresh Token ID 저장 (7일)",,v1.2.0
+보안 및 인증,Refresh Token 저장,,"Token ID: UUID v4 (jti claim)
+저장 위치: Redis
+저장 데이터: userId, deviceInfo, ipAddress, createdAt, expiresAt
+인덱스: userId, jti
+만료: Redis TTL 자동 삭제 (7일)",,v1.2.0
+보안 코딩,CORS 정책,,"허용 Origin: https://yaldi.kr, https://app.yaldi.kr, http://localhost:5173
+허용 Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+허용 Headers: Authorization, Content-Type, X-Requested-With, Idempotency-Key
+Credentials: true
+Preflight 캐시: 86400초",,v1.2.0
+보안 코딩,Security Headers,,"Strict-Transport-Security: max-age=31536000
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Content-Security-Policy: default-src ""self""
+Referrer-Policy: strict-origin-when-cross-origin",,v1.2.0
+보안 코딩,Input Validation,,"이메일: RFC 5322 정규식
+비밀번호: 8자 이상, 영문+숫자+특수문자
+SQL: Prepared Statement 사용
+HTML: 이스케이프 처리
+파일 경로: 경로 정규화 및 검증",,v1.2.0
+보안 코딩,Rate Limiting,,"인증된 사용자: 1000 req/hour
+미인증 사용자: 100 req/hour
+로그인 시도: 5 req/15min
+파일 업로드: 10 req/hour
+구현: Redis 기반 Sliding Window",,v1.2.0
+보안 코딩,비밀번호 보안,,"해싱: bcrypt (cost factor 12)
+Salt: 자동 생성
+정책: 최소 8자, 최대 128자
+재사용 방지: 최근 3개
+실패 처리: 5회 실패 시 계정 임시 잠금",,v1.2.0
+보안 코딩,암호화,,"In-Transit: TLS 1.3 (최소 1.2)
+At-Rest (DB): AES-256
+At-Rest (S3): SSE-S3
+민감 정보: AES-256 컬럼 암호화
+키 관리: AWS KMS / HashiCorp Vault",,v1.2.0
+보안 코딩,CORS Preflight,,"OPTIONS 요청: 모든 엔드포인트 지원
+응답 헤더: Access-Control-Allow-Origin, Access-Control-Allow-Methods
+인증 불필요",,v1.2.0
+RESTful 아키텍처,프로젝트 조회 (HATEOAS),HATEOAS 링크 포함 프로젝트 조회,GET,v1.1.0,v1.2.0
+RESTful 아키텍처,ETag 캐싱 조회,ETag를 이용한 캐시 검증,GET,v1.1.0,v1.2.0
+RESTful 아키텍처,낙관적 잠금 수정,ETag를 이용한 동시 수정 방지,PATCH,v1.1.0,v1.2.0
+API 설계,에러 코드 체계,,"HTTP 상태 코드와 함께 서비스별 에러 코드 제공
+AUTH_xxx: 인증/인가 에러
+PROJ_xxx: 프로젝트 관련 에러
+ERD_xxx: ERD 관련 에러
+RATE_xxx: Rate Limit 에러
+FILE_xxx: 파일 관련 에러
+VALID_xxx: 입력 검증 에러
+SYS_xxx: 시스템 에러","디버깅 및 에러 추적 용이
+클라이언트에서 에러 타입별 처리 가능",v1.2.0
+API 설계,페이지네이션 (Pagination),Spring Pageable,Spring Data의 Pageable 인터페이스를 사용하여 모든 목록 조회 API에서 페이지네이션을 지원합니다.,,v1.2.0
+API 설계,페이지네이션 (Pagination),Pageable 파라미터,"page: 페이지 번호 (0부터 시작, 기본값: 0)
+size: 페이지 크기 (기본값: 20, 최대: 100)
+sort: 정렬 기준 (형식: property,direction 예: createdAt,desc)","여러 정렬 기준 지원: sort=name,asc&sort=createdAt,desc",v1.2.0
+API 설계,페이지네이션 (Pagination),Page 응답 구조,"Spring Page 객체 형식:
+{
+ ""content"": [...], // 실제 데이터 배열
+ ""pageable"": {
+ ""pageNumber"": 0, // 현재 페이지 번호
+ ""pageSize"": 20, // 페이지 크기
+ ""sort"": {...}, // 정렬 정보
+ ""offset"": 0, // 오프셋
+ ""paged"": true,
+ ""unpaged"": false
+ },
+ ""totalPages"": 5, // 전체 페이지 수
+ ""totalElements"": 100, // 전체 요소 수
+ ""size"": 20, // 페이지 크기
+ ""number"": 0, // 현재 페이지 번호
+ ""first"": true, // 첫 페이지 여부
+ ""last"": false, // 마지막 페이지 여부
+ ""numberOfElements"": 20, // 현재 페이지의 요소 수
+ ""empty"": false // 비어있는지 여부
+}",content 필드에 실제 데이터 포함,v1.2.0
+API 설계,페이지네이션 (Pagination),사용 예시,"GET /api/v1/projects?page=0&size=20&sort=createdAt,desc
+GET /api/v1/projects?page=1&size=10&sort=name,asc
+GET /api/v1/teams?page=0&size=50&sort=createdAt,desc&sort=name,asc",page는 0부터 시작,v1.2.0
+API 설계,페이지네이션 (Pagination),정렬 방향,"asc: 오름차순 (Ascending)
+desc: 내림차순 (Descending)
+기본값: createdAt,desc (최신순)",정렬 파라미터 생략 시 기본 정렬 적용,v1.2.0
+API 설계,페이지네이션 (Pagination),페이지 크기 제한,"최소: 1
+기본값: 20
+최대: 100
+초과 시: 자동으로 100으로 제한",대용량 조회 시 성능 고려,v1.2.0
+API 설계,에러 코드 목록 - 인증,,"AUTH_001: 잘못된 인증 정보 (401)
+AUTH_002: 토큰 만료 (401)
+AUTH_003: 권한 없음 (403)
+AUTH_004: 이메일 인증 필요 (403)",에러 코드로 세밀한 에러 처리,v1.2.0
+API 설계,에러 코드 목록 - 리소스,,"PROJ_001: 프로젝트 없음 (404)
+PROJ_002: 프로젝트 이름 중복 (409)
+ERD_001: 테이블 없음 (404)
+ERD_002: 컬럼 없음 (404)
+ERD_003: 관계 없음 (404)
+ERD_004: 순환 참조 발생 (400)",리소스별 명확한 에러 구분,v1.2.0
+API 설계,에러 코드 목록 - 시스템,,"RATE_001: Rate Limit 초과 (429)
+FILE_001: 파일 크기 초과 (413)
+FILE_002: 지원하지 않는 파일 형식 (400)
+VALID_001: 입력값 검증 실패 (400)
+SYS_001: 내부 서버 에러 (500)
+SYS_002: 데이터베이스 연결 실패 (500)
+SYS_003: 외부 서비스 연결 실패 (502)",시스템 에러 세분화,v1.2.0
+API 설계,에러 응답 예시,,"{ ""success"": false, ""code"": ""ERD_004"", ""message"": ""순환 참조가 발생했습니다"", ""timestamp"": ""2024-10-18T10:00:00Z"", ""requestId"": ""req_abc123"" } }",상세한 에러 정보 제공,v1.2.0
+API 설계,Pagination 표준,,"Offset-based (기본): page, limit, sort 파라미터
+Cursor-based (대용량): cursor, limit 파라미터
+응답 형식: { data, pagination: { page, limit, total, totalPages, hasNext, hasPrev, nextCursor, prevCursor } }",2가지 페이지네이션 방식 지원,v1.2.0
+API 설계,Pagination 응답 예시,,"{ ""data"": [...], ""pagination"": { ""page"": 2, ""limit"": 20, ""total"": 156, ""totalPages"": 8, ""hasNext"": true, ""hasPrev"": true, ""nextCursor"": ""eyJpZCI6MTIzfQ=="", ""prevCursor"": ""eyJpZCI6MTAwfQ=="" } }",상세한 페이지네이션 정보,v1.2.0
+API 설계,필터링 쿼리 표준,,"형식: filter[field][operator]=value
+연산자: eq, ne, gt, gte, lt, lte, in, like, between
+예시: filter[status]=active&filter[createdAt][gte]=2024-01-01",복잡한 쿼리 조건 지원,v1.2.0
+API 설계,정렬 쿼리 표준,,"오름차순: sort=field
+내림차순: sort=-field
+다중 정렬: sort=-createdAt,name",,v1.2.0
+API 설계,검색 쿼리 표준,,"전체 검색: search=keyword
+필드 선택: fields=id,name,createdAt
+관계 포함: include=owner,members",,v1.2.0
+API 설계,Idempotency Key,,"POST 요청에 Idempotency-Key 헤더 포함
+동일 키로 재요청 시 이전 결과 반환
+키 형식: UUID v4
+유효 기간: 24시간
+재요청 시 응답 헤더: Idempotent-Replayed: true",중복 생성 방지,v1.2.0
+API 설계,Webhook 이벤트 시스템,,"이벤트 발생 시 등록된 URL로 POST 요청
+HMAC-SHA256 서명으로 무결성 검증
+재시도 정책: 3회 (exponential backoff: 1s, 2s, 4s)
+타임아웃: 5초",실시간 이벤트 알림,v1.2.0
+API 설계,Webhook 이벤트 타입,,"project.created/updated/deleted
+table.created/updated/deleted
+relation.created/deleted
+export.completed
+version.created",,v1.2.0
+API 설계,Webhook Payload 형식,,"{ ""id"": ""evt_abc123"", ""type"": ""table.created"", ""timestamp"": ""2024-10-18T10:00:00Z"", ""data"": { ""projectId"": ""prj_123"", ""tableId"": ""tbl_456"", ""tableName"": ""users"" }, ""signature"": ""sha256=abc123..."" }",,v1.2.0
+API 설계,Webhook 서명 검증,,"HMAC-SHA256(payload, secret) 검증
+서명 헤더: X-Webhook-Signature
+재전송 공격 방지: 타임스탬프 5분 이내 검증",보안 강화,v1.2.0
+API 설계,Rate Limiting 정책,,"토큰 버킷 알고리즘
+인증된 사용자: 1000 req/hour
+미인증 사용자: 100 req/hour
+Export API: 10 req/hour
+Webhook: 1000 events/hour",DDoS 방어,v1.2.0
+API 설계,Rate Limit 엔드포인트별 정책,,"GET /api/v1/projects: 1000/hour
+POST /api/v1/projects: 100/hour
+POST /api/v1/auth/login: 20/hour (무차별 대입 공격 방어)",,v1.2.0
+API 설계,Rate Limit 응답 헤더,,"X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 873
+X-RateLimit-Reset: 1697619600
+Retry-After: 3600",,v1.2.0
+API 설계,Rate Limit 초과 응답,,"429 Too Many Requests
+{ ""success"": false, ""code"": ""RATE_001"", ""message"": ""요청 한도를 초과했습니다.
+1시간 후 다시 시도하세요"" }",,v1.2.0
+API 설계,Batch API 설계,,"여러 요청을 하나로 묶어 처리
+최대 100개 요청/배치
+의존성 지원 (이전 요청 결과 참조)
+Atomic 옵션: 전체 성공 또는 전체 실패",네트워크 왕복 최소화,v1.2.0
+API 설계,Batch 요청 형식,,"{ ""requests"": [ { ""id"": ""req1"", ""method"": ""POST"", ""url"": ""/api/v1/erd_tables"", ""body"": { ""name"": ""users"" } }, { ""id"": ""req2"", ""method"": ""POST"", ""url"": ""/api/v1/erd_columns"", ""body"": { ""tableId"": ""${req1.response.data.tableId}"", ""name"": ""id"" }, ""dependsOn"": [""req1""] } ], ""options"": { ""atomic"": false } }",,v1.2.0
+API 설계,Batch 응답 형식,,"{ ""responses"": [ { ""id"": ""req1"", ""status"": 201, ""body"": { ""success"": true, ""data"": { ""tableId"": ""tbl_123"" } } }, { ""id"": ""req2"", ""status"": 201, ""body"": { ""success"": true, ""data"": { ""columnId"": ""col_456"" } } } ] }",,v1.2.0
+API 설계,API 버전 관리,,"URI 버전 관리: /api/v1, /api/v2
+Major 버전만 URI에 포함
+Minor/Patch는 하위 호환",버전 관리 전략,v1.2.0
+API 설계,API Deprecation 정책,,"3단계 프로세스: (1) 발표 (6개월 전) → (2) Deprecated → (3) Sunset
+응답 헤더: Deprecation: true, Sunset: Sat 01 Jan 2025 00:00:00 GMT
+대체 API 정보: Link: </api/v2/projects>; rel=""successor-version""",,v1.2.0
+API 설계,API Versioning 전략,,"Breaking Changes (v1→v2): 데이터 구조 변경, 필수 필드 추가, 엔드포인트 경로 변경
+Non-Breaking (v1.1, v1.2): 선택 필드 추가, 새 엔드포인트 추가, 버그 수정",,v1.2.0
+API 설계,SLA (Service Level Agreement),,"가용성: 99.9% uptime (월 43분 다운타임 허용)
+응답 시간: p50 < 100ms, p95 < 300ms, p99 < 1000ms
+에러율: < 0.1%
+지원 시간: 평일 09:00-18:00 KST
+긴급 장애: 1시간 내 대응",서비스 수준 약정,v1.2.0
+API 설계,SLO (Service Level Objective),,"GET /api/v1/projects: p95 < 200ms
+POST /api/v1/erd_tables: p95 < 500ms
+WebSocket 연결: < 1초
+Export API: < 30초",,v1.2.0
+API 설계,SLA 위반 시 보상,,"월 가용성 < 99.9%: 서비스 크레딧 10%
+월 가용성 < 99.0%: 서비스 크레딧 25%
+월 가용성 < 95.0%: 서비스 크레딧 50%",,v1.2.0
+API 설계,모니터링 및 Status Page,,"Status Page: https://status.yaldi.kr
+Uptime 모니터링: Pingdom
+메트릭 수집: Prometheus + Grafana",,v1.2.0
+API 설계,JSON Schema 정의,,"자동 검증 라이브러리: ajv
+Request 검증: 클라이언트 요청 자동 검증
+Response 검증: 개발 환경에서 응답 형식 검증
+TypeScript 타입 생성: json-schema-to-typescript",스키마 기반 검증,v1.2.0
+API 설계,JSON Schema 활용,,"Project: { type: ""object"", properties: { name: { type: ""string"", minLength: 1, maxLength: 100 }, database: { enum: [""postgresql"", ""PostgreSQL""] } }, required: [""name"", ""database""] }",,v1.2.0
+API 설계,Request/Response 압축,,"gzip 압축 지원
+요청 압축: Content-Encoding: gzip
+응답 압축: Accept-Encoding: gzip, deflate
+최소 크기: 1KB 이상만 압축
+압축률: 평균 70-80% 감소
+제외 대상: 이미지, 동영상",네트워크 대역폭 절약,v1.2.0
+API 설계,압축 응답 헤더,,"Content-Encoding: gzip
+Vary: Accept-Encoding
+Content-Length: 1234
+X-Uncompressed-Size: 5678",,v1.2.0
+API 설계,CORS 정책 상세,,"허용 Origin: https://yaldi.kr, https://app.yaldi.kr, http://localhost:5173
+허용 Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+허용 Headers: Authorization, Content-Type, X-Requested-With, Idempotency-Key
+노출 Headers: X-RateLimit-*, X-Request-ID
+Credentials: true
+Preflight 캐시: 86400초 (24시간)",도메인 간 API 호출 허용,v1.2.0
+API 설계,CORS Preflight,,"OPTIONS 요청: 모든 엔드포인트에서 지원
+응답 헤더: Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Max-Age
+인증 불필요",,v1.2.0
+공통 에러 코드,400 Bad Request,,"요청 파라미터가 잘못되었거나 필수 값이 누락된 경우.
+응답 예시:
+{ ""success"": false, ""code"": ""ERR400"", ""message"": ""이메일 형식이 올바르지 않습니다"" }",,v1.2.0
+공통 에러 코드,401 Unauthorized,,"인증 토큰이 없거나 유효하지 않은 경우.
+응답 예시:
+{ ""success"": false, ""code"": ""ERR401"", ""message"": ""유효하지 않은 토큰입니다"" }",,v1.2.0
+공통 에러 코드,403 Forbidden,,"권한이 없는 리소스에 접근한 경우.
+응답 예시:
+{ ""success"": false, ""code"": ""ERR403"", ""message"": ""이 프로젝트에 대한 편집 권한이 없습니다"" }",,v1.2.0
+공통 에러 코드,404 Not Found,,"요청한 리소스가 존재하지 않는 경우.
+응답 예시:
+{ ""success"": false, ""code"": ""ERR404"", ""message"": ""프로젝트를 찾을 수 없습니다"" }",,v1.2.0
+공통 에러 코드,409 Conflict,,"중복된 리소스가 존재하는 경우 (예: 이미 존재하는 이메일).
+응답 예시:
+{ ""success"": false, ""code"": ""ERR409"", ""message"": ""이미 존재하는 이메일입니다"" }",,v1.2.0
+공통 에러 코드,413 Payload Too Large,,"업로드 파일 크기가 제한을 초과한 경우.
+응답 예시:
+{ ""success"": false, ""code"": ""ERR413"", ""message"": ""파일 크기는 5MB를 초과할 수 없습니다"" }",,v1.2.0
+공통 에러 코드,429 Too Many Requests,,"Rate Limit을 초과한 경우.
+응답 예시:
+{ ""success"": false, ""code"": ""ERR429"", ""message"": ""요청 한도를 초과했습니다.
+1시간 후 다시 시도하세요"" }",,v1.2.0
+공통 에러 코드,500 Internal Server Error,,"서버 내부 오류.
+응답 예시:
+{ ""success"": false, ""code"": ""ERR500"", ""message"": ""서버 오류가 발생했습니다.
+잠시 후 다시 시도해주세요"" }",,v1.2.0
+공통 에러 코드,200 OK,,요청 성공,,v1.2.0
+공통 에러 코드,201 Created,,리소스 생성 성공,,v1.2.0
+공통 에러 코드,204 No Content,,"요청 성공, 응답 본문 없음",,v1.2.0
+공통 에러 코드,304 Not Modified,,리소스 변경 없음 (캐시 사용),,v1.2.0
+공통 에러 코드,412 Precondition Failed,,"조건부 요청 실패 (ETag 불일치).
+응답 예시:
+{ ""success"": false, ""code"": ""ERR412"", ""message"": ""리소스가 다른 사용자에 의해 수정되었습니다"" }",,v1.2.0
+공통 에러 코드,503 Service Unavailable,,"서비스 이용 불가.
+응답 예시:
+{ ""success"": false, ""code"": ""ERR503"", ""message"": ""서버 점검 중입니다.
+잠시 후 다시 시도해주세요"" }",,v1.2.0
+예제,인증 예제 (JavaScript),,,,v1.2.0
+예제,에러 처리 예제 (JavaScript),,,,v1.2.0
+예제,실시간 협업 예제 (SSE),,,,v1.2.0
+예제,충돌 해결 예제 (CRDT),,,,v1.2.0
+예제,구글 로그인 예제 (JavaScript),,,,v1.2.0
+예제,깃허브 로그인 예제 (JavaScript),,,,v1.2.0
+용어 설명,세션 쿠키,,"Session Cookie
+사용자 세션을 식별하는 쿠키 (yaldi_session_id)",,v1.2.0
+용어 설명,HttpOnly,,"쿠키 속성
+JavaScript로 접근 불가 (XSS 방어)",,v1.2.0
+용어 설명,Secure,,"쿠키 속성
+HTTPS에서만 전송",,v1.2.0
+용어 설명,SameSite,,"쿠키 속성
+CSRF 공격 방어 (Lax/Strict/None)",,v1.2.0
+용어 설명,세션 저장소,,"Redis
+세션 데이터를 저장하는 인메모리 캐시",,v1.2.0
+용어 설명,CSRF 토큰,,"Cross-Site Request Forgery 토큰
+변경 작업 시 검증용 토큰",,v1.2.0
+용어 설명,OAuth 2.0,,인가(Authorization) 프로토콜,,v1.2.0
+용어 설명,PKCE,,"Proof Key for Code Exchange
+OAuth 보안 강화 확장",,v1.2.0
+용어 설명,세션 검증,,"세션 유효성 확인
+GET /api/v1/auth/session",,v1.2.0
+용어 설명,RBAC,,"Role-Based Access Control
+역할 기반 접근 제어",,v1.2.0
+용어 설명,Permission,,"세밀한 권한 (project:read, table:write 등)",,v1.2.0
+용어 설명,Audit Log,,모든 API 호출 및 데이터 변경 기록,,v1.2.0
+용어 설명,Activity Log,,사용자별 활동 기록,,v1.2.0
+용어 설명,HATEOAS,,Hypermedia As The Engine Of Application State,,v1.2.0
+용어 설명,ETag,,"Entity Tag
+리소스 버전 식별 해시값",,v1.2.0
+용어 설명,Idempotency,,"멱등성
+동일 요청 반복 시 동일 결과",,v1.2.0
+용어 설명,Optimistic Locking,,"낙관적 잠금
+ETag로 동시 수정 충돌 방지",,v1.2.0
+용어 설명,API Versioning,,"API 버전 관리 (/api/v1, /api/v2)",,v1.2.0
+용어 설명,CORS,,Cross-Origin Resource Sharing,,v1.2.0
+용어 설명,CSP,,Content Security Policy,,v1.2.0
+용어 설명,HSTS,,HTTP Strict Transport Security,,v1.2.0
+용어 설명,XSS,,Cross-Site Scripting 공격,,v1.2.0
+용어 설명,CSRF,,Cross-Site Request Forgery 공격,,v1.2.0
+용어 설명,SQL Injection,,SQL 삽입 공격,,v1.2.0
+용어 설명,Rate Limiting,,요청 제한 (DDoS 방어),,v1.2.0
+용어 설명,bcrypt,,비밀번호 해싱 알고리즘,,v1.2.0
+용어 설명,TLS 1.3,,전송 계층 보안 프로토콜,,v1.2.0
+용어 설명,AES-256,,대칭키 암호화 알고리즘,,v1.2.0
+용어 설명,Liveness Probe,,프로세스 생존 확인,,v1.2.0
+용어 설명,Readiness Probe,,트래픽 수신 준비 확인,,v1.2.0
+용어 설명,Prometheus,,메트릭 수집/모니터링 시스템,,v1.2.0
+용어 설명,Grafana,,메트릭 시각화 대시보드,,v1.2.0
+용어 설명,ELK Stack,,Elasticsearch + Logstash + Kibana,,v1.2.0
+용어 설명,Circuit Breaker,,장애 전파 방지 패턴,,v1.2.0
+용어 설명,Service Discovery,,서비스 위치 자동 탐색,,v1.2.0
+용어 설명,Saga Pattern,,분산 트랜잭션 패턴,,v1.2.0
+용어 설명,OpenAPI 3.0,,RESTful API 표준 명세,,v1.2.0
+용어 설명,Swagger UI,,OpenAPI 시각화 도구,,v1.2.0
+용어 설명,servers,,API 서버 URL 정의,,v1.2.0
+용어 설명,components/schemas,,재사용 가능한 데이터 모델,,v1.2.0
+용어 설명,deprecated,,더 이상 사용하지 않는 API 표시,,v1.2.0
+용어 설명,ERD,,"Entity Relationship Diagram
+개체 관계 다이어그램",,v1.2.0
+용어 설명,DTO,,"Data Transfer Object
+데이터 전송 객체",,v1.2.0
+버전 관리,변경 이력,,"v1.1.0: API 설계 표준 12가지 추가 (에러 코드, Pagination, Webhook 등)
+v1.0.0: 초기 릴리스",,v1.2.0
+버전 관리,버전 정보,,"Current Version: v1.1.0
+Release Date: 2024-10-20
+API Version: v1",,v1.2.0
+OpenAPI 호환,OpenAPI 3.0 스펙,,"RESTful API를 기술하기 위한 표준 명세
+openapi: 3.0.3
+info: API 정보 (제목, 버전, 설명)
+servers: API 서버 URL (4개 환경)
+paths: API 엔드포인트 정의 (60+ APIs)
+components: 재사용 가능한 스키마
+security: 인증 방식 (Bearer JWT)
+tags: API 그룹화 (카테고리)",,v1.2.0
+OpenAPI 호환,API 서버 URL,,"Production: https://api.yaldi.kr
+Staging: https://api-staging.yaldi.kr
+Development: https://api-dev.yaldi.kr
+Local: http://localhost:8080",,v1.2.0
+OpenAPI 호환,Deprecated API 처리,,"deprecated: true로 표시
+응답 헤더: Sunset, Link
+3단계 프로세스: 발표 (6개월 전) → Deprecated → Sunset",,v1.2.0
+OpenAPI 호환,Content Negotiation,,"Accept: application/json (기본)
+Accept: text/csv (Export용 별도 엔드포인트)",,v1.2.0
+클라우드 운영,Health Check,,"Liveness Probe: /api/v1/health (프로세스 생존 확인)
+Readiness Probe: /api/v1/ready (트래픽 수신 준비)
+의존성 체크: database, redis, s3",,v1.2.0
+클라우드 운영,Metrics & Monitoring,,"성능 지표: p50 < 100ms, p95 < 500ms, p99 < 1000ms
+처리량: > 1000 req/s
+에러율: < 0.1%
+모니터링 스택: Prometheus + Grafana / CloudWatch / Datadog",,v1.2.0
+클라우드 운영,Logging 구조,,"구조화된 로그 (JSON)
+로그 레벨: ERROR, WARN, INFO, DEBUG
+중앙 집중식: ELK Stack / Loki
+분산 추적: OpenTelemetry / Jaeger / Zipkin",,v1.2.0
+클라우드 운영,Microservice 패턴,,"API Gateway: 단일 진입점, 라우팅
+Service Discovery: 서비스 위치 자동 탐색
+Circuit Breaker: 장애 전파 방지
+서비스 간 통신: gRPC (내부), REST (외부)
+비동기 메시징: Kafka, RabbitMQ",,v1.2.0
+참고 문서,Yaldi 문서,,"API Documentation: https://docs.yaldi.kr
+Status Page: https://status.yaldi.kr
+GitHub: https://github.com/yaldi-io",,v1.2.0
+참고 문서,공식 문서,,"OpenAPI Specification: https://spec.openapi.org/oas/v3.0.3
+JWT: https://jwt.io
+OAuth 2.0: https://oauth.net/2/
+RFC 6749 (OAuth 2.0): https://tools.ietf.org/html/rfc6749
+RFC 7662 (Token Introspection): https://tools.ietf.org/html/rfc7662",,v1.2.0

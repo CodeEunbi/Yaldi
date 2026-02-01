@@ -1,0 +1,477 @@
+카테고리,이벤트타입,방향,엔드포인트,전송방식,설명,요청데이터,응답데이터,예제요청,예제응답,비고,구현예시,버전
+메타데이터,-,-,,-,WebSocket 엔드포인트,ws://localhost:8080/ws (개발) / wss://api.yaldi.kr/ws (운영),,,,JWT 인증 (쿠키 또는 Query Parameter),"// 개발 환경
+const ws = new WebSocket('ws://localhost:8080/ws');
+
+// 운영 환경
+const ws = new WebSocket('wss://api.yaldi.kr/ws');
+
+// 모바일: Query Parameter 인증
+const token = getAccessToken();
+const ws = new WebSocket(`wss://api.yaldi.kr/ws?token=${token}`);",v1.3.0
+메타데이터,-,-,,-,STOMP 프로토콜,STOMP over WebSocket 사용,,,,구독: /topic/project/{projectKey}. 발행: /pub/erd/...,"import SockJS from 'sockjs-client';
+import { Stomp } from '@stomp/stompjs';
+
+const socket = new SockJS('http://localhost:8080/ws');
+const stompClient = Stomp.over(socket);
+
+stompClient.connect({}, () => {
+  // 구독
+  stompClient.subscribe('/topic/project/123', (message) => {
+    const event = JSON.parse(message.body);
+    handleEvent(event);
+  });
+
+  // 발행
+  stompClient.send('/pub/erd/table/move', {}, JSON.stringify(data));
+});",v1.3.0
+메타데이터,-,-,,-,보안 정책,Rate Limit: 초당 10개 메시지. Max Message Size: 1MB. 동시 접속: 프로젝트당 24명. OWNER/EDITOR만 발행 가능.,,,,Viewer는 구독만 가능 (읽기 전용),"class RateLimiter {
+  constructor(maxPerSecond = 10) {
+    this.max = maxPerSecond;
+    this.queue = [];
+  }
+
+  send(message) {
+    const now = Date.now();
+    this.queue = this.queue.filter(t => now - t < 1000);
+
+    if (this.queue.length >= this.max) {
+      console.warn('Rate limit exceeded');
+      return false;
+    }
+
+    this.queue.push(now);
+    stompClient.send(destination, {}, JSON.stringify(message));
+    return true;
+  }
+}",v1.3.0
+메타데이터,-,-,,-,Heartbeat,30초마다 Ping/Pong. 60초 미응답 시 연결 종료. 재연결 시 Exponential Backoff 권장.,,,,자동 재연결: 1s → 2s → 4s → 8s → 최대 30s,"stompClient.connect({
+  heartbeat: {
+    outgoing: 30000, // 30초
+    incoming: 30000
+  }
+}, onConnect, onError);
+
+function onError(error) {
+  console.error('Connection error:', error);
+  setTimeout(() => reconnect(), getBackoffDelay());
+}
+
+function getBackoffDelay() {
+  return Math.min(1000 * Math.pow(2, retryCount), 30000);
+}",v1.3.0
+연결,CONNECTION_ERROR,서버→클라이언트,,자동,WebSocket 연결 실패,,"{ ""code"": 4001|4003|4004|4429, ""message"": ""string"", ""closeCode"": number }",,"{ ""type"": ""CONNECTION_ERROR"", ""data"": { ""code"": 4003, ""message"": ""프로젝트 편집 권한이 없습니다. Viewer는 읽기 전용입니다."", ""closeCode"": 4003 } }","에러 코드: 4001(Unauthorized), 4003(Forbidden), 4004(Not Found), 4429(Too Many Connections)",,v1.3.0
+연결,CONNECTION_ESTABLISHED,서버→클라이언트,,자동,WebSocket 연결 성공,,"{ ""sessionId"": ""string"", ""projectKey"": number, ""userKey"": number, ""role"": ""OWNER|EDITOR|VIEWER"", ""serverTime"": ""ISO 8601"" }",,"{ ""type"": ""CONNECTION_ESTABLISHED"", ""data"": { ""sessionId"": ""sess_abc123"", ""projectKey"": 123, ""userKey"": 456, ""role"": ""EDITOR"", ""serverTime"": ""2025-01-14T12:00:00Z"" } }",연결 성공 시 첫 메시지. OWNER/EDITOR만 발행 가능. Viewer는 구독만 가능.,"stompClient.connect({}, () => {
+  console.log('WebSocket 연결됨');
+
+  stompClient.subscribe('/topic/project/123', (message) => {
+    const msg = JSON.parse(message.body);
+    if (msg.type === 'CONNECTION_ESTABLISHED') {
+      console.log('세션 ID:', msg.data.sessionId);
+    }
+  });
+});",v1.3.0
+테이블,TABLE_MOVE,클라이언트→서버,,Direct Broadcast,테이블 이동 (드래그 중),"{ ""tableKey"": number, ""xPosition"": number, ""yPosition"": number }",브로드캐스트,"stompClient.send('/pub/erd/table/move', {}, JSON.stringify({
+  tableKey: 789,
+  xPosition: 150.5,
+  yPosition: 250.3
+}));","{ ""type"": ""TABLE_MOVE"", ""data"": { ""tableKey"": 789, ""xPosition"": 150.5, ""yPosition"": 250.3 } }",A-1 타입 (Direct Broadcast). Kafka 없이 즉시 전송. DB 저장 없음 (휘발성). 지연시간: 평균 60ms.,"// 테이블 드래그 중
+let isDragging = false;
+
+onTableDragStart = (tableKey) => {
+  isDragging = true;
+};
+
+onTableDrag = (tableKey, x, y) => {
+  if (isDragging) {
+    stompClient.send('/pub/erd/table/move', {}, JSON.stringify({
+      tableKey, xPosition: x, yPosition: y
+    }));
+  }
+};
+
+onTableDragEnd = (tableKey, x, y) => {
+  isDragging = false;
+  // 최종 위치 저장
+  stompClient.send('/pub/erd/table/move/end', {}, JSON.stringify({
+    tableKey, xPosition: x, yPosition: y
+  }));
+};",v1.3.0
+테이블,TABLE_MOVE_END,클라이언트→서버,,Kafka,테이블 이동 완료 (드래그 종료),"{ ""tableKey"": number, ""xPosition"": number, ""yPosition"": number }",없음 (DB 저장만),"stompClient.send('/pub/erd/table/move/end', {}, JSON.stringify({
+  tableKey: 789,
+  xPosition: 150.5,
+  yPosition: 250.3
+}));",,A-2 타입 (DB 저장). 드래그 완료 시 최종 위치 저장. 응답 없음.,,v1.3.0
+테이블,TABLE_NEW,서버→클라이언트,,Kafka,테이블 생성 브로드캐스트,브로드캐스트,"{ ""tableKey"": number, ""projectKey"": number, ""logicalName"": ""string"", ""physicalName"": ""string"", ""xPosition"": number, ""yPosition"": number, ""colorHex"": ""string"", ""createdAt"": ""ISO 8601"", ""updatedAt"": ""ISO 8601"" }",,"{ ""type"": ""TABLE_NEW"", ""data"": { ""tableKey"": 789, ""projectKey"": 123, ""logicalName"": ""사용자"", ""physicalName"": ""users"", ""xPosition"": 100, ""yPosition"": 200, ""colorHex"": ""#3B82F6"", ""createdAt"": ""2025-01-14T12:00:00Z"", ""updatedAt"": ""2025-01-14T12:00:00Z"" } }",A 타입 (REST + Kafka). REST API로 생성 후 Kafka로 브로드캐스트. Batch Compression 적용 (2초 간격).,"// 테이블 생성 이벤트 수신
+stompClient.subscribe('/topic/project/123', (message) => {
+  const event = JSON.parse(message.body);
+
+  if (event.type === 'TABLE_NEW') {
+    const table = event.data;
+    addTableToCanvas(table);
+  }
+});",v1.3.0
+테이블,TABLE_LNAME,서버→클라이언트,,Kafka,테이블 논리명 변경,"{ ""tableKey"": number, ""logicalName"": ""string"" }","{ ""tableKey"": number, ""logicalName"": ""string"" }",,"{ ""type"": ""TABLE_LNAME"", ""data"": { ""tableKey"": 789, ""logicalName"": ""회원"" } }",A 타입 (REST + Kafka). REST API로 수정 후 Kafka로 브로드캐스트.,,v1.3.0
+테이블,TABLE_PNAME,서버→클라이언트,,Kafka,테이블 물리명 변경,"{ ""tableKey"": number, ""physicalName"": ""string"" }","{ ""tableKey"": number, ""physicalName"": ""string"" }",,"{ ""type"": ""TABLE_PNAME"", ""data"": { ""tableKey"": 789, ""physicalName"": ""members"" } }",A 타입 (REST + Kafka). REST API로 수정 후 Kafka로 브로드캐스트.,,v1.3.0
+테이블,TABLE_COLOR,서버→클라이언트,,Kafka,테이블 색상 변경,"{ ""tableKey"": number, ""colorHex"": ""string"" }","{ ""tableKey"": number, ""colorHex"": ""string"" }",,"{ ""type"": ""TABLE_COLOR"", ""data"": { ""tableKey"": 789, ""colorHex"": ""#EF4444"" } }",A 타입 (REST + Kafka). REST API로 수정 후 Kafka로 브로드캐스트.,,v1.3.0
+테이블,TABLE_DEL,서버→클라이언트,,Kafka,테이블 삭제,"{ ""tableKey"": number }","{ ""tableKey"": number, ""deletedAt"": ""ISO 8601"" }",,"{ ""type"": ""TABLE_DEL"", ""data"": { ""tableKey"": 789, ""deletedAt"": ""2025-01-14T12:05:00Z"" } }",A 타입 (REST + Kafka). Soft delete. 관련 컬럼/관계도 함께 삭제. REST API로 삭제 후 Kafka로 브로드캐스트.,,v1.3.0
+테이블,TABLE_LOCK,클라이언트→서버,,Kafka,테이블 편집 잠금,"{ ""tableKey"": number }",브로드캐스트,"stompClient.send('/pub/erd/table/lock', {}, JSON.stringify({
+  tableKey: 789
+}));","{ ""type"": ""TABLE_LOCK"", ""data"": { ""tableKey"": 789, ""userEmail"": ""user@example.com"", ""userName"": ""홍길동"" } }",C 타입 (WebSocket + Redis + Kafka). Redis에 락 저장 (TTL 30초). Heartbeat 10초마다 갱신. Kafka로 브로드캐스트. Batch Compression 적용.,"// 테이블 더블클릭 시 잠금
+onTableDoubleClick = (tableKey) => {
+  stompClient.send('/pub/erd/table/lock', {}, JSON.stringify({
+    tableKey
+  }));
+};
+
+// 잠금 획득 알림 수신
+stompClient.subscribe('/topic/project/123', (message) => {
+  const event = JSON.parse(message.body);
+
+  if (event.type === 'TABLE_LOCK') {
+    const { tableKey, userEmail, userName } = event.data;
+    showTableLocked(tableKey, userName);
+  }
+});",v1.3.0
+테이블,TABLE_UNLOCK,클라이언트→서버,,Kafka,테이블 편집 잠금 해제,"{ ""tableKey"": number }",브로드캐스트,"stompClient.send('/pub/erd/table/unlock', {}, JSON.stringify({
+  tableKey: 789
+}));","{ ""type"": ""TABLE_UNLOCK"", ""data"": { ""tableKey"": 789, ""userEmail"": ""user@example.com"" } }",C 타입 (WebSocket + Redis + Kafka). Redis 락 삭제. Kafka로 브로드캐스트. 연결 해제 시 자동 해제. Batch Compression 적용.,"// 테이블 편집 완료 시 잠금 해제
+onTableEditComplete = (tableKey) => {
+  stompClient.send('/pub/erd/table/unlock', {}, JSON.stringify({
+    tableKey
+  }));
+};
+
+// WebSocket 연결 해제 시 자동 해제됨 (SessionDisconnectEvent)",v1.3.0
+컬럼,COLUMN_NEW,서버→클라이언트,,Kafka,컬럼 생성,브로드캐스트,"{ ""columnKey"": number, ""tableKey"": number, ""logicalName"": ""string"", ""physicalName"": ""string"", ""dataType"": ""string"", ""dataDetail"": [""string""], ""isPrimaryKey"": boolean, ""isNullable"": boolean, ""isUnique"": boolean, ""isIncremental"": boolean, ""defaultValue"": ""string|null"", ""comment"": ""string"", ""columnOrder"": number, ""createdAt"": ""ISO 8601"" }",,"{ ""type"": ""COLUMN_NEW"", ""data"": { ""columnKey"": 456, ""tableKey"": 789, ""logicalName"": ""아이디"", ""physicalName"": ""id"", ""dataType"": ""INTEGER"", ""dataDetail"": [], ""isPrimaryKey"": true, ""isNullable"": false, ""isUnique"": true, ""isIncremental"": true, ""defaultValue"": null, ""comment"": ""사용자 고유 ID"", ""columnOrder"": 1, ""createdAt"": ""2025-01-14T12:03:00Z"" } }","A 타입 (REST + Kafka). REST API로 생성 후 Kafka로 브로드캐스트. dataDetail: VARCHAR(255) → [""255""], DECIMAL(10,2) → [""10"",""2""]. Batch Compression 적용.",,v1.3.0
+컬럼,COLUMN_UPDATE,서버→클라이언트,,Kafka,컬럼 수정,브로드캐스트,"{ ""columnKey"": number, ""tableKey"": number, ""logicalName"": ""string"", ""physicalName"": ""string"", ""dataType"": ""string"", ""dataDetail"": [""string""], ""isPrimaryKey"": boolean, ""isNullable"": boolean, ""isUnique"": boolean, ""isIncremental"": boolean, ""defaultValue"": ""string|null"", ""comment"": ""string"", ""updatedAt"": ""ISO 8601"" }",,"{ ""type"": ""COLUMN_UPDATE"", ""data"": { ""columnKey"": 456, ""tableKey"": 789, ""logicalName"": ""사용자 아이디"", ""comment"": ""회원 고유 식별자"", ""updatedAt"": ""2025-01-14T12:04:00Z"" } }",A 타입 (REST + Kafka). REST API로 수정 후 Kafka로 브로드캐스트. Batch Compression 적용.,,v1.3.0
+컬럼,COLUMN_ORDER,클라이언트→서버,,Kafka,컬럼 순서 변경,"{ ""columnKey"": number, ""columnOrder"": number }",브로드캐스트,"stompClient.send('/pub/erd/column/reorder', {}, JSON.stringify({
+  columnKey: 456,
+  columnOrder: 3
+}));","{ ""type"": ""COLUMN_ORDER"", ""data"": { ""columnKey"": 456, ""columnOrder"": 3 } }",B 타입 (WebSocket + DB + Kafka). DB 업데이트 후 Kafka로 브로드캐스트. Batch Compression 적용.,"// 컬럼 드래그 앤 드롭으로 순서 변경
+onColumnReorder = (columnKey, newOrder) => {
+  stompClient.send('/pub/erd/column/reorder', {}, JSON.stringify({
+    columnKey,
+    columnOrder: newOrder
+  }));
+};",v1.3.0
+컬럼,COLUMN_DEL,서버→클라이언트,,Kafka,컬럼 삭제,브로드캐스트,"{ ""columnKey"": number, ""tableKey"": number, ""deletedAt"": ""ISO 8601"" }",,"{ ""type"": ""COLUMN_DEL"", ""data"": { ""columnKey"": 456, ""tableKey"": 789, ""deletedAt"": ""2025-01-14T12:05:00Z"" } }",A 타입 (REST + Kafka). Soft delete. PK/FK인 경우 관련 관계도 함께 삭제. REST API로 삭제 후 Kafka로 브로드캐스트. Batch Compression 적용.,,v1.3.0
+관계,RELATION_NEW,서버→클라이언트,,Kafka,관계 생성,브로드캐스트,"{ ""relationKey"": number, ""projectKey"": number, ""fromTableKey"": number, ""toTableKey"": number, ""relationType"": ""ONE_TO_ONE|ONE_TO_MANY|MANY_TO_ONE|MANY_TO_MANY"", ""constraintName"": ""string"", ""onDeleteAction"": ""CASCADE|SET_NULL|SET_DEFAULT|RESTRICT|NO_ACTION"", ""onUpdateAction"": ""CASCADE|SET_NULL|SET_DEFAULT|RESTRICT|NO_ACTION"", ""createdAt"": ""ISO 8601"" }",,"{ ""type"": ""RELATION_NEW"", ""data"": { ""relationKey"": 345, ""projectKey"": 123, ""fromTableKey"": 789, ""toTableKey"": 012, ""relationType"": ""ONE_TO_MANY"", ""constraintName"": ""fk_users_posts"", ""onDeleteAction"": ""CASCADE"", ""onUpdateAction"": ""NO_ACTION"", ""createdAt"": ""2025-01-14T12:06:00Z"" } }",A 타입 (REST + Kafka). REST API로 생성 후 Kafka로 브로드캐스트. relationType 4가지 지원. Batch Compression 적용.,,v1.3.0
+관계,RELATION_UPDATE,서버→클라이언트,,Kafka,관계 수정,브로드캐스트,"{ ""relationKey"": number, ""relationType"": ""ONE_TO_ONE|ONE_TO_MANY|MANY_TO_ONE|MANY_TO_MANY"", ""constraintName"": ""string"", ""onDeleteAction"": ""CASCADE|SET_NULL|SET_DEFAULT|RESTRICT|NO_ACTION"", ""onUpdateAction"": ""CASCADE|SET_NULL|SET_DEFAULT|RESTRICT|NO_ACTION"", ""updatedAt"": ""ISO 8601"" }",,"{ ""type"": ""RELATION_UPDATE"", ""data"": { ""relationKey"": 345, ""relationType"": ""MANY_TO_ONE"", ""constraintName"": ""fk_posts_users"", ""onDeleteAction"": ""SET_NULL"", ""updatedAt"": ""2025-01-14T12:07:00Z"" } }",A 타입 (REST + Kafka). REST API로 수정 후 Kafka로 브로드캐스트. Batch Compression 적용.,,v1.3.0
+관계,RELATION_DEL,서버→클라이언트,,Kafka,관계 삭제,브로드캐스트,"{ ""relationKey"": number, ""deletedAt"": ""ISO 8601"" }",,"{ ""type"": ""RELATION_DEL"", ""data"": { ""relationKey"": 345, ""deletedAt"": ""2025-01-14T12:08:00Z"" } }",A 타입 (REST + Kafka). Soft delete. REST API로 삭제 후 Kafka로 브로드캐스트. Batch Compression 적용.,,v1.3.0
+커서,CURSOR_POS,클라이언트→서버,,Direct Broadcast,커서 위치 공유,"{ ""projectKey"": number, ""xPosition"": number, ""yPosition"": number }",브로드캐스트,"stompClient.send('/pub/erd/cursor', {}, JSON.stringify({
+  projectKey: 123,
+  xPosition: 350.5,
+  yPosition: 450.3
+}));","{ ""type"": ""CURSOR_POS"", ""data"": { ""projectKey"": 123, ""userEmail"": ""user@example.com"", ""userName"": ""홍길동"", ""userColor"": ""#3B82F6"", ""xPosition"": 350.5, ""yPosition"": 450.3 } }",D 타입 (Direct Broadcast). DB/Redis 저장 없음 (완전 휘발성). Kafka 없이 WebSocket으로 즉시 브로드캐스트. 지연시간: 평균 60ms. 초당 최대 30회 전송 권장.,"// 커서 이동 전송 (쓰로틀링)
+let lastCursorSent = 0;
+const throttleMs = 33; // 30fps
+
+canvas.onmousemove = (e) => {
+  const now = Date.now();
+  if (now - lastCursorSent < throttleMs) return;
+
+  stompClient.send('/pub/erd/cursor', {}, JSON.stringify({
+    projectKey: 123,
+    xPosition: e.clientX,
+    yPosition: e.clientY
+  }));
+
+  lastCursorSent = now;
+};
+
+// 다른 사용자 커서 표시
+stompClient.subscribe('/topic/project/123', (message) => {
+  const event = JSON.parse(message.body);
+
+  if (event.type === 'CURSOR_POS') {
+    const { userEmail, userName, userColor, xPosition, yPosition } = event.data;
+    updateRemoteCursor(userEmail, userName, userColor, xPosition, yPosition);
+  }
+});",v1.3.0
+멤버,MEMBER_JOIN,서버→클라이언트,,자동,멤버 입장,브로드캐스트,"{ ""userKey"": number, ""userEmail"": ""string"", ""userName"": ""string"", ""role"": ""OWNER|EDITOR|VIEWER"", ""joinedAt"": ""ISO 8601"" }",,"{ ""type"": ""MEMBER_JOIN"", ""data"": { ""userKey"": 789, ""userEmail"": ""user3@example.com"", ""userName"": ""김철수"", ""role"": ""EDITOR"", ""joinedAt"": ""2025-01-14T12:05:00Z"" } }",새 사용자 WebSocket 연결 시 자동 브로드캐스트,"// 멤버 입장 처리
+stompClient.subscribe('/topic/project/123', (message) => {
+  const event = JSON.parse(message.body);
+
+  if (event.type === 'MEMBER_JOIN') {
+    const { userName } = event.data;
+    showNotification(`${userName}님이 입장했습니다.`);
+    updateOnlineUsersList(event.data);
+  }
+});",v1.3.0
+멤버,MEMBER_LEAVE,서버→클라이언트,,자동,멤버 퇴장,브로드캐스트,"{ ""userKey"": number, ""userEmail"": ""string"", ""userName"": ""string"", ""leftAt"": ""ISO 8601"", ""reason"": ""DISCONNECTED|TIMEOUT|KICKED"" }",,"{ ""type"": ""MEMBER_LEAVE"", ""data"": { ""userKey"": 789, ""userEmail"": ""user3@example.com"", ""userName"": ""김철수"", ""leftAt"": ""2025-01-14T12:10:00Z"", ""reason"": ""DISCONNECTED"" } }","사용자 WebSocket 연결 해제 시 자동 브로드캐스트. reason: DISCONNECTED(연결끊김), TIMEOUT(타임아웃), KICKED(강제퇴장)","// 멤버 퇴장 처리
+stompClient.subscribe('/topic/project/123', (message) => {
+  const event = JSON.parse(message.body);
+
+  if (event.type === 'MEMBER_LEAVE') {
+    const { userName, reason } = event.data;
+    showNotification(`${userName}님이 퇴장했습니다.`);
+    removeFromOnlineUsersList(event.data);
+
+    // 연결 해제 시 해당 사용자의 모든 락 자동 해제됨
+  }
+});",v1.3.0
+에러,ERROR,서버→클라이언트,,자동,에러 메시지,,"{ ""code"": ""string"", ""message"": ""string"", ""details"": object }",,"{ ""type"": ""ERROR"", ""data"": { ""code"": ""OPERATION_FAILED"", ""message"": ""테이블 잠금 획득 실패"", ""details"": { ""reason"": ""이미 다른 사용자가 편집중입니다."", ""tableKey"": 789, ""lockedBy"": ""user@example.com"" } } }","에러 코드: UNAUTHORIZED(인증 실패), FORBIDDEN(권한 없음), VALIDATION_ERROR(유효성 검증 실패), OPERATION_FAILED(작업 실패), CONFLICT(충돌), RATE_LIMIT_EXCEEDED(속도 제한 초과), MESSAGE_TOO_LARGE(메시지 크기 초과), INTERNAL_ERROR(서버 오류)","// 에러 처리
+stompClient.subscribe('/topic/project/123', (message) => {
+  const event = JSON.parse(message.body);
+
+  if (event.type === 'ERROR') {
+    const { code, message, details } = event.data;
+
+    switch (code) {
+      case 'RATE_LIMIT_EXCEEDED':
+        showNotification('작업이 너무 빠릅니다. 잠시 후 다시 시도하세요.');
+        break;
+      case 'VALIDATION_ERROR':
+        showFieldError(details.field, message);
+        break;
+      case 'OPERATION_FAILED':
+        showError(message);
+        break;
+      default:
+        console.error('Unexpected error:', message);
+    }
+  }
+});",v1.3.0
+테이블,TableNewEvent,서버→클라이언트,/topic/project/{projectKey},REST API 자동,테이블 생성 이벤트,"{ ""type"": ""TableNewEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""tableKey"": 10, ""projectKey"": 100, ""logicalName"": ""회원"", ""physicalName"": ""members"", ""xPosition"": 100.0, ""yPosition"": 200.0, ""colorHex"": ""FF6B6B"", ""createdAt"": ""2025-11-16T10:30:00"", ""updatedAt"": ""2025-11-16T10:30:00"" } }",,"// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'TableNewEvent') {
+    // 새 테이블 추가 처리
+  }
+});","{ ""type"": ""TableNewEvent"", ""event"": { ""tableKey"": 10, ""logicalName"": ""회원"" } }",POST /api/v1/erd/projects/{projectKey}/tables 호출 시 자동 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleTableNew = (event) => {
+  const table = event.event;
+  canvas.addTable({
+    id: table.tableKey,
+    name: table.logicalName,
+    x: table.xPosition,
+    y: table.yPosition,
+    color: table.colorHex
+  });
+};",v1.3.0
+테이블,TableMoveEvent,클라이언트→서버→클라이언트,/pub/erd/table/move,WebSocket 발행,테이블 이동 중 (드래그),"{ ""tableKey"": 10, ""xPosition"": 150.5, ""yPosition"": 220.3 }","{ ""type"": ""TableMoveEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""tableKey"": 10, ""xPosition"": 150.5, ""yPosition"": 220.3 } }","// 발행
+stompClient.send('/pub/erd/table/move', {}, JSON.stringify({
+  tableKey: 10,
+  xPosition: 150.5,
+  yPosition: 220.3
+}));
+
+// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'TableMoveEvent') {
+    // 테이블 이동 처리
+  }
+});","{ ""type"": ""TableMoveEvent"", ""event"": { ""tableKey"": 10, ""xPosition"": 150.5 } }","DB 저장 없음, 실시간 브로드캐스트만 수행. 휘발성. Kafka 미사용.","const handleTableMove = (event) => {
+  const { tableKey, xPosition, yPosition } = event.event;
+  canvas.moveTable(tableKey, xPosition, yPosition);
+};",v1.3.0
+테이블,TableMoveEnd,클라이언트→서버,,WebSocket 발행,테이블 이동 완료,"{ ""tableKey"": 10, ""xPosition"": 150.5, ""yPosition"": 220.3 }",,"// 발행 (드래그 완료 시)
+stompClient.send('/pub/erd/table/move/end', {}, JSON.stringify({
+  tableKey: 10,
+  xPosition: 150.5,
+  yPosition: 220.3
+}));",,드래그 완료 시 최종 위치만 DB 저장. 브로드캐스트 없음. DB 저장: PostgreSQL.,"const handleDragEnd = (tableKey, x, y) => {
+  stompClient.send('/pub/erd/table/move/end', {}, JSON.stringify({
+    tableKey,
+    xPosition: x,
+    yPosition: y
+  }));
+};",v1.3.0
+테이블,TableLnameEvent,서버→클라이언트,,REST API 자동,테이블 논리명 변경,,"{ ""type"": ""TableLnameEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""tableKey"": 10, ""logicalName"": ""사용자"" } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'TableLnameEvent') {
+    // 논리명 변경 처리
+  }
+});","{ ""type"": ""TableLnameEvent"", ""event"": { ""tableKey"": 10, ""logicalName"": ""사용자"" } }",PATCH /api/v1/erd/tables/{tableKey}에서 logicalName 수정 시 자동 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleTableLnameChange = (event) => {
+  const { tableKey, logicalName } = event.event;
+  canvas.updateTableName(tableKey, logicalName);
+};",v1.3.0
+테이블,TablePnameEvent,서버→클라이언트,,REST API 자동,테이블 물리명 변경,,"{ ""type"": ""TablePnameEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""tableKey"": 10, ""physicalName"": ""users"" } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'TablePnameEvent') {
+    // 물리명 변경 처리
+  }
+});","{ ""type"": ""TablePnameEvent"", ""event"": { ""tableKey"": 10, ""physicalName"": ""users"" } }",PATCH /api/v1/erd/tables/{tableKey}에서 physicalName 수정 시 자동 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleTablePnameChange = (event) => {
+  const { tableKey, physicalName } = event.event;
+  canvas.updateTablePhysicalName(tableKey, physicalName);
+};",v1.3.0
+테이블,TableColorEvent,서버→클라이언트,,REST API 자동,테이블 색상 변경,,"{ ""type"": ""TableColorEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""tableKey"": 10, ""colorHex"": ""4ECDC4"" } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'TableColorEvent') {
+    // 색상 변경 처리
+  }
+});","{ ""type"": ""TableColorEvent"", ""event"": { ""tableKey"": 10, ""colorHex"": ""4ECDC4"" } }",PATCH /api/v1/erd/tables/{tableKey}에서 colorHex 수정 시 자동 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleTableColorChange = (event) => {
+  const { tableKey, colorHex } = event.event;
+  canvas.updateTableColor(tableKey, colorHex);
+};",v1.3.0
+테이블,TableDelEvent,서버→클라이언트,,REST API 자동,테이블 삭제,,"{ ""type"": ""TableDelEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""tableKey"": 10 } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'TableDelEvent') {
+    // 테이블 삭제 처리
+  }
+});","{ ""type"": ""TableDelEvent"", ""event"": { ""tableKey"": 10 } }",DELETE /api/v1/erd/tables/{tableKey} 호출 시 자동 브로드캐스트. DB 저장: PostgreSQL (삭제). Kafka 사용.,"const handleTableDelete = (event) => {
+  const { tableKey } = event.event;
+  canvas.removeTable(tableKey);
+};",v1.3.0
+테이블,TableLockEvent,클라이언트→서버→클라이언트,/pub/erd/table/lock,WebSocket 발행,테이블 편집 잠금,"{ ""tableKey"": 10 }","{ ""type"": ""TableLockEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""tableKey"": 10, ""userEmail"": ""user@example.com"", ""userName"": ""홍길동"" } }","// 발행
+stompClient.send('/pub/erd/table/lock', {}, JSON.stringify({
+  tableKey: 10
+}));
+
+// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'TableLockEvent') {
+    // 잠금 처리
+  }
+});","{ ""type"": ""TableLockEvent"", ""event"": { ""tableKey"": 10, ""userName"": ""홍길동"" } }",Redis 잠금 (TTL 30초). 이미 잠금 존재 시 실패. WebSocket 연결 끊김 시 자동 해제. Kafka 사용.,"const handleTableLock = (event) => {
+  const { tableKey, userName } = event.event;
+  canvas.lockTable(tableKey, userName);
+  showToast(`${userName}님이 편집 중입니다`);
+};",v1.3.0
+테이블,TableUnlockEvent,클라이언트→서버→클라이언트,/pub/erd/table/unlock,WebSocket 발행,테이블 편집 잠금 해제,"{ ""tableKey"": 10 }","{ ""type"": ""TableUnlockEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""tableKey"": 10, ""userEmail"": ""user@example.com"" } }","// 발행
+stompClient.send('/pub/erd/table/unlock', {}, JSON.stringify({
+  tableKey: 10
+}));
+
+// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'TableUnlockEvent') {
+    // 잠금 해제 처리
+  }
+});","{ ""type"": ""TableUnlockEvent"", ""event"": { ""tableKey"": 10 } }",Redis 잠금 삭제. Kafka 사용.,"const handleTableUnlock = (event) => {
+  const { tableKey } = event.event;
+  canvas.unlockTable(tableKey);
+};",v1.3.0
+컬럼,ColumnNewEvent,서버→클라이언트,/topic/project/{projectKey},REST API 자동,컬럼 생성,,"{ ""type"": ""ColumnNewEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""columnKey"": 101, ""tableKey"": 10, ""logicalName"": ""회원 아이디"", ""physicalName"": ""member_id"", ""dataType"": ""BIGINT"", ""isPrimaryKey"": true, ""createdAt"": ""2025-11-16T10:30:00"" } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'ColumnNewEvent') {
+    // 컬럼 추가 처리
+  }
+});","{ ""type"": ""ColumnNewEvent"", ""event"": { ""columnKey"": 101, ""logicalName"": ""회원 아이디"" } }",POST /api/v1/erd/tables/{tableKey}/columns 호출 시 자동 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleColumnNew = (event) => {
+  const column = event.event;
+  canvas.addColumn(column.tableKey, {
+    id: column.columnKey,
+    name: column.logicalName,
+    type: column.dataType,
+    isPK: column.isPrimaryKey
+  });
+};",v1.3.0
+컬럼,ColumnUpdateEvent,서버→클라이언트,/topic/project/{projectKey},REST API 자동,컬럼 수정,,"{ ""type"": ""ColumnUpdateEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""columnKey"": 101, ""tableKey"": 10, ""logicalName"": ""사용자 이메일"", ""physicalName"": ""user_email"", ""dataType"": ""VARCHAR"", ""dataDetail"": [""255""], ""updatedAt"": ""2025-11-16T10:35:00"" } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'ColumnUpdateEvent') {
+    // 컬럼 수정 처리
+  }
+});","{ ""type"": ""ColumnUpdateEvent"", ""event"": { ""columnKey"": 101, ""logicalName"": ""사용자 이메일"" } }",PATCH /api/v1/erd/columns/{columnKey} 호출 시 자동 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleColumnUpdate = (event) => {
+  const column = event.event;
+  canvas.updateColumn(column.columnKey, {
+    name: column.logicalName,
+    type: column.dataType
+  });
+};",v1.3.0
+컬럼,ColumnDelEvent,서버→클라이언트,,REST API 자동,컬럼 삭제,,"{ ""type"": ""ColumnDelEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""columnKey"": 101 } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'ColumnDelEvent') {
+    // 컬럼 삭제 처리
+  }
+});","{ ""type"": ""ColumnDelEvent"", ""event"": { ""columnKey"": 101 } }",DELETE /api/v1/erd/columns/{columnKey} 호출 시 자동 브로드캐스트. DB 저장: PostgreSQL (삭제). Kafka 사용.,"const handleColumnDelete = (event) => {
+  const { columnKey } = event.event;
+  canvas.removeColumn(columnKey);
+};",v1.3.0
+컬럼,ColumnOrderEvent,클라이언트→서버→클라이언트,/pub/erd/column/reorder,WebSocket 발행,컬럼 순서 변경,"{ ""columnKey"": 101, ""columnOrder"": 2 }","{ ""type"": ""ColumnOrderEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""columnKey"": 101, ""columnOrder"": 2 } }","// 발행
+stompClient.send('/pub/erd/column/reorder', {}, JSON.stringify({
+  columnKey: 101,
+  columnOrder: 2
+}));
+
+// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'ColumnOrderEvent') {
+    // 순서 변경 처리
+  }
+});","{ ""type"": ""ColumnOrderEvent"", ""event"": { ""columnKey"": 101, ""columnOrder"": 2 } }",컬럼 순서 변경 후 DB 저장 및 Kafka 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleColumnReorder = (event) => {
+  const { columnKey, columnOrder } = event.event;
+  canvas.reorderColumn(columnKey, columnOrder);
+};",v1.3.0
+관계,RelationNewEvent,서버→클라이언트,/topic/project/{projectKey},REST API 자동,관계 생성,,"{ ""type"": ""RelationNewEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""relationKey"": 1, ""fromTableKey"": 10, ""toTableKey"": 20, ""relationType"": ""ONE_TO_MANY"", ""createdAt"": ""2025-11-16T10:30:00"" } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'RelationNewEvent') {
+    // 관계 추가 처리
+  }
+});","{ ""type"": ""RelationNewEvent"", ""event"": { ""relationKey"": 1, ""relationType"": ""ONE_TO_MANY"" } }",POST /api/v1/erd/projects/{projectKey}/relations 호출 시 자동 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleRelationNew = (event) => {
+  const relation = event.event;
+  canvas.addRelation({
+    id: relation.relationKey,
+    from: relation.fromTableKey,
+    to: relation.toTableKey,
+    type: relation.relationType
+  });
+};",v1.3.0
+관계,RelationUpdateEvent,서버→클라이언트,/topic/project/{projectKey},REST API 자동,관계 수정,,"{ ""type"": ""RelationUpdateEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""relationKey"": 1, ""constraintName"": ""fk_order_member"", ""onDeleteAction"": ""SET_NULL"", ""updatedAt"": ""2025-11-16T10:35:00"" } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'RelationUpdateEvent') {
+    // 관계 수정 처리
+  }
+});","{ ""type"": ""RelationUpdateEvent"", ""event"": { ""relationKey"": 1, ""onDeleteAction"": ""SET_NULL"" } }",PATCH /api/v1/erd/relations/{relationKey} 호출 시 자동 브로드캐스트. DB 저장: PostgreSQL. Kafka 사용.,"const handleRelationUpdate = (event) => {
+  const relation = event.event;
+  canvas.updateRelation(relation.relationKey, {
+    onDelete: relation.onDeleteAction
+  });
+};",v1.3.0
+관계,RelationDelEvent,서버→클라이언트,,REST API 자동,관계 삭제,,"{ ""type"": ""RelationDelEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""relationKey"": 1 } }","// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'RelationDelEvent') {
+    // 관계 삭제 처리
+  }
+});","{ ""type"": ""RelationDelEvent"", ""event"": { ""relationKey"": 1 } }",DELETE /api/v1/erd/relations/{relationKey} 호출 시 자동 브로드캐스트. DB 저장: PostgreSQL (삭제). Kafka 사용.,"const handleRelationDelete = (event) => {
+  const { relationKey } = event.event;
+  canvas.removeRelation(relationKey);
+};",v1.3.0
+협업,CursorPosEvent,클라이언트→서버→클라이언트,/pub/erd/cursor,WebSocket 발행,커서 위치 공유,"{ ""projectKey"": 100, ""xPosition"": 350.5, ""yPosition"": 420.8 }","{ ""type"": ""CursorPosEvent"", ""projectKey"": 100, ""userKey"": 1, ""event"": { ""projectKey"": 100, ""userEmail"": ""user@example.com"", ""userName"": ""홍길동"", ""userColor"": ""#ff6b6b"", ""xPosition"": 350.5, ""yPosition"": 420.8 } }","// 발행 (마우스 이동 시 주기적, throttle 50-100ms 권장)
+stompClient.send('/pub/erd/cursor', {}, JSON.stringify({
+  projectKey: 100,
+  xPosition: 350.5,
+  yPosition: 420.8
+}));
+
+// 구독
+stompClient.subscribe('/topic/project/100', (message) => {
+  const data = JSON.parse(message.body);
+  if (data.event.type === 'CursorPosEvent') {
+    // 커서 위치 표시
+  }
+});","{ ""type"": ""CursorPosEvent"", ""event"": { ""userName"": ""홍길동"", ""userColor"": ""#ff6b6b"", ""xPosition"": 350.5 } }","완전 휘발성, DB/Redis 저장 없음. 사용자 색상 자동 생성 (이메일 해시 기반). Kafka 미사용.","const handleCursorMove = (event) => {
+  const cursor = event.event;
+  canvas.showCursor({
+    user: cursor.userName,
+    color: cursor.userColor,
+    x: cursor.xPosition,
+    y: cursor.yPosition
+  });
+};
+
+// Throttle 적용
+let lastCursorSent = 0;
+canvas.addEventListener('mousemove', (e) => {
+  const now = Date.now();
+  if (now - lastCursorSent > 50) {
+    stompClient.send('/pub/erd/cursor', {}, JSON.stringify({
+      projectKey: 100,
+      xPosition: e.clientX,
+      yPosition: e.clientY
+    }));
+    lastCursorSent = now;
+  }
+});",v1.3.0

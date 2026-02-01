@@ -1,0 +1,27 @@
+=== Domain Analysis ===
+{domain}
+
+=== Schema Design ===
+Mode: {mode}
+{schema}
+
+=== Validation ===
+Valid: {is_valid}
+Issues: {issues}
+
+=== Optimization ===
+{optimization}
+
+위 결과들을 종합하여 최종 ERD의 품질을 평가하세요.
+
+⚠️ 중요: decision_rationale은 사용자에게 보여지는 설명입니다.
+- 생성된 ERD가 어떤 기능을 지원하는지 구체적으로 설명하세요
+- 핵심 테이블들이 어떻게 연결되어 있는지 설명하세요
+- 어떤 최적화가 적용되었는지 간단히 언급하세요
+- 기술적인 용어보다는 이해하기 쉬운 표현을 사용하세요
+- "도메인 분석이 정확하고..." 같은 평가 위주 문장은 피하세요
+
+예시:
+"사용자, 게시글, 댓글 기능을 지원하는 커뮤니티 시스템입니다. User 테이블을 중심으로 Post와 Comment가 연결되어 있으며, 사용자별 게시글 조회와 댓글 관리를 위한 인덱스가 설정되어 있습니다."
+
+JSON만 반환하세요.

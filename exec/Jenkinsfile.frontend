@@ -1,0 +1,135 @@
+pipeline {
+    agent any
+
+    environment {
+        TARGET_BRANCH = 'master'
+        NODE_OPTIONS = '--max-old-space-size=4096'
+    }
+    
+    options {
+        gitLabConnection('GitLab')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: 'gitlab-token',
+                    url: 'https://lab.ssafy.com/s13-final/S13P31A308.git',
+                    branch: "${TARGET_BRANCH}"
+            }
+        }
+        
+        stage('Check Frontend Changes') {
+            steps {
+                script {
+                    try {
+                        def changes = sh(
+                            script: 'git diff --name-only HEAD~1 HEAD | grep "^Front-End/" || true',
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (changes) {
+                            echo "✅ Frontend 변경 감지:\n${changes}"
+                            env.FRONTEND_CHANGED = 'true'
+                        } else {
+                            echo "⏭️ Frontend 변경 없음 (빌드 스킵, 재시작만)"
+                            env.FRONTEND_CHANGED = 'false'
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ 첫 빌드"
+                        env.FRONTEND_CHANGED = 'true'
+                    }
+                }
+            }
+        }
+        
+        stage('Install Dependencies') {
+            when {
+                expression { env.FRONTEND_CHANGED == 'true' }
+            }
+            steps {
+                dir('Front-End/yaldi') {
+                    sh 'npm ci'
+                }
+            }
+        }
+        
+        stage('Build Frontend') {
+            when {
+                expression { env.FRONTEND_CHANGED == 'true' }
+            }
+            steps {
+                withCredentials([
+                    string(credentialsId: 'frontend-api-url', variable: 'VITE_API_BASE_URL')
+                ]) {
+                    dir('Front-End/yaldi') {
+                        sh '''
+                            npm run build
+                            
+                            mkdir -p /workspace/frontend
+                            rm -rf /workspace/frontend/dist
+                            cp -r dist /workspace/frontend/
+                    
+                            # 권한 확인
+                            ls -la /workspace/frontend/dist/
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy Frontend') {
+            steps {
+                script {
+                    if (env.FRONTEND_CHANGED == 'true') {
+                        echo "🚀 새 빌드로 배포 (Build #${BUILD_NUMBER})"
+                    } else {
+                        echo "🔄 Nginx 재시작만 수행"
+                    }
+                }
+                sh '''
+                    docker compose -f /workspace/docker-compose.yml restart nginx
+                    
+                    echo "⏳ Waiting for nginx to restart..."
+                    sleep 3
+                    
+                    if docker ps | grep -q nginx; then
+                        echo "✅ Nginx is running"
+                        docker logs nginx --tail 10
+                    else
+                        echo "❌ Nginx failed to restart"
+                        docker logs nginx --tail 30
+                        exit 1
+                    fi
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                if (env.FRONTEND_CHANGED == 'true') {
+                    echo "✅ Frontend 빌드 + 배포 완료! (Build #${BUILD_NUMBER})"
+                } else {
+                    echo "✅ Nginx 재시작 완료!"
+                }
+            }
+            updateGitlabCommitStatus name: 'jenkins', state: 'success'
+
+        }
+        failure {
+            echo "❌ Frontend 배포 실패!"
+            updateGitlabCommitStatus name: 'jenkins', state: 'failed'
+        }
+        cleanup {
+            script {
+                if (env.FRONTEND_CHANGED == 'true') {
+                    dir('Front-End/yaldi') {
+                        sh 'rm -rf node_modules dist || true'
+                    }
+                }
+            }
+        }
+    }
+}
